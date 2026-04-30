@@ -34,18 +34,11 @@ export const EVM_CCTP_CONTRACTS = {
 
 // Arc is Circle's L1: EVM-compatible, ~2s blocks, gas paid in USDC, finality
 // expected to be much faster than rollups (no L1 settlement dependency).
-//
-// Circle's public Arc Testnet RPC has a tight rate limit. If 429s are a
-// problem during local dev, set PUBLIC_ARC_RPC_URL in `.env` to a dedicated
-// endpoint (dRPC, Alchemy, etc.) — the Vite-style PUBLIC_ prefix makes it
-// available client-side at build time.
-const ARC_RPC_URL = import.meta.env.PUBLIC_ARC_RPC_URL ?? 'https://rpc.testnet.arc.network';
-
 export const arcTestnet = defineChain({
     id: 5042002,
     name: 'Arc Testnet',
     nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 6 },
-    rpcUrls: { default: { http: [ARC_RPC_URL] } },
+    rpcUrls: { default: { http: ['https://rpc.testnet.arc.network'] } },
     blockExplorers: { default: { name: 'ArcScan', url: 'https://testnet.arcscan.app' } },
     testnet: true,
 });
