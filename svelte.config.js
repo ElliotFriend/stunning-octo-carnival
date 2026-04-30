@@ -7,10 +7,7 @@ const config = {
             filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
     },
     kit: {
-        adapter: adapter({
-            fallback: 'index.html',
-            strict: false,
-        }),
+        adapter: adapter(),
     },
 };
 
