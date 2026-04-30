@@ -1,5 +1,11 @@
 import { hexToBytes, type Hex } from 'viem';
-import { BASE, STELLAR, type Direction } from '$lib/config';
+import {
+	EVM_CCTP_CONTRACTS,
+	EVM_CHAINS,
+	STELLAR,
+	type Direction,
+	type EvmChainId
+} from '$lib/config';
 import { depositForBurnToBase, mintAndForward } from '$lib/stellar/cctp';
 import { approveUsdc, getUsdcAllowance, parseUsdcStellar } from '$lib/stellar/usdc';
 import {
@@ -9,7 +15,7 @@ import {
 } from '$lib/evm/usdc';
 import {
 	depositForBurnWithHookToStellar,
-	receiveMessageOnBase
+	receiveMessageOnEvm
 } from '$lib/evm/cctp';
 import { pollAttestation, type IrisMessage } from '$lib/circle/iris';
 import type { EvmWallet } from '$lib/evm/wallet';
@@ -38,46 +44,55 @@ export type Step = {
 
 export type TransferState = {
 	direction: Direction;
+	evmChainId: EvmChainId;
 	phase: Phase;
 	amount: string;
 	steps: Step[];
 	error: string | null;
 };
 
-const initialState = (direction: Direction): TransferState => ({
+const initialState = (direction: Direction, evmChainId: EvmChainId): TransferState => ({
 	direction,
+	evmChainId,
 	phase: 'idle',
 	amount: '',
-	steps: stepsFor(direction),
+	steps: stepsFor(direction, evmChainId),
 	error: null
 });
 
-function stepsFor(direction: Direction): Step[] {
-	if (direction === 'stellar-to-base') {
+function stepsFor(direction: Direction, evmChainId: EvmChainId): Step[] {
+	const evmLabel = EVM_CHAINS[evmChainId].label;
+	if (direction === 'stellar-to-evm') {
 		return [
 			{ key: 'approve', label: 'Approve TokenMessenger on Stellar', status: 'pending' },
 			{ key: 'burn', label: 'Burn USDC on Stellar', status: 'pending' },
 			{ key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
-			{ key: 'mint', label: 'Mint USDC on Base', status: 'pending' }
+			{ key: 'mint', label: `Mint USDC on ${evmLabel}`, status: 'pending' }
 		];
 	}
 	return [
-		{ key: 'approve', label: 'Approve USDC on Base', status: 'pending' },
-		{ key: 'burn', label: 'Burn USDC on Base', status: 'pending' },
+		{ key: 'approve', label: `Approve USDC on ${evmLabel}`, status: 'pending' },
+		{ key: 'burn', label: `Burn USDC on ${evmLabel}`, status: 'pending' },
 		{ key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
 		{ key: 'mint', label: 'Mint USDC on Stellar (forwarder)', status: 'pending' }
 	];
 }
 
-export function createTransferStore(initial: Direction = 'stellar-to-base') {
-	let state = $state<TransferState>(initialState(initial));
+export function createTransferStore(
+	initialDirection: Direction,
+	initialEvmChain: EvmChainId
+) {
+	let state = $state<TransferState>(initialState(initialDirection, initialEvmChain));
 
-	function setDirection(d: Direction) {
-		state = initialState(d);
+	// Single setter so callers don't have to read existing store state to
+	// update one field — that would create a read+write cycle inside any
+	// $effect that calls these.
+	function setShape(shape: { direction: Direction; evmChainId: EvmChainId }) {
+		state = initialState(shape.direction, shape.evmChainId);
 	}
 
 	function reset() {
-		state = initialState(state.direction);
+		state = initialState(state.direction, state.evmChainId);
 	}
 
 	function patchStep(key: Step['key'], patch: Partial<Step>) {
@@ -92,13 +107,15 @@ export function createTransferStore(initial: Direction = 'stellar-to-base') {
 		);
 	}
 
-	async function runStellarToBase(args: {
+	async function runStellarToEvm(args: {
 		stellarAddress: string;
 		evmWallet: EvmWallet;
+		evmChainId: EvmChainId;
 		amount: string;
 	}) {
 		state.amount = args.amount;
 		const stellarAmount = parseUsdcStellar(args.amount);
+		const evmCfg = EVM_CHAINS[args.evmChainId];
 
 		// Approve TMM as a spender on USDC SAC. The contract pulls tokens via
 		// SEP-41 `transfer_from`, which requires a pre-existing allowance —
@@ -142,6 +159,7 @@ export function createTransferStore(initial: Direction = 'stellar-to-base') {
 			const result = await depositForBurnToBase({
 				caller: args.stellarAddress,
 				amount: stellarAmount,
+				destinationDomain: evmCfg.domain,
 				evmRecipient: args.evmWallet.address
 			});
 			burnHash = result.hash;
@@ -170,12 +188,13 @@ export function createTransferStore(initial: Direction = 'stellar-to-base') {
 		}
 		patchStep('attest', { status: 'done', endedAt: Date.now(), detail: 'attested' });
 
-		// Mint on Base
+		// Mint on the destination EVM chain
 		state.phase = 'minting';
 		patchStep('mint', { status: 'active', startedAt: Date.now() });
 		let mintHash: `0x${string}`;
 		try {
-			mintHash = await receiveMessageOnBase({
+			mintHash = await receiveMessageOnEvm({
+				chainId: args.evmChainId,
 				wallet: args.evmWallet,
 				message: attest.message,
 				attestation: attest.attestation
@@ -187,39 +206,43 @@ export function createTransferStore(initial: Direction = 'stellar-to-base') {
 			status: 'done',
 			endedAt: Date.now(),
 			hash: mintHash,
-			hashUrl: `${BASE.explorer}/tx/${mintHash}`
+			hashUrl: `${evmCfg.explorer}/tx/${mintHash}`
 		});
 
 		state.phase = 'done';
 	}
 
-	async function runBaseToStellar(args: {
+	async function runEvmToStellar(args: {
 		stellarAddress: string;
 		evmWallet: EvmWallet;
+		evmChainId: EvmChainId;
 		amount: string;
 	}) {
 		state.amount = args.amount;
-		const evmAmount = parseEvmUsdc(args.amount);
+		const evmAmount = parseEvmUsdc(args.evmChainId, args.amount);
+		const evmCfg = EVM_CHAINS[args.evmChainId];
 
 		// Approve if needed
 		state.phase = 'approving';
 		patchStep('approve', { status: 'active', startedAt: Date.now() });
 		try {
 			const allowance = await getEvmUsdcAllowance(
+				args.evmChainId,
 				args.evmWallet.address,
-				BASE.contracts.tokenMessengerV2
+				EVM_CCTP_CONTRACTS.tokenMessengerV2
 			);
 			if (allowance < evmAmount) {
-				const hash = await approveEvmUsdc(
-					args.evmWallet,
-					BASE.contracts.tokenMessengerV2,
-					evmAmount
-				);
+				const hash = await approveEvmUsdc({
+					chainId: args.evmChainId,
+					wallet: args.evmWallet,
+					spender: EVM_CCTP_CONTRACTS.tokenMessengerV2,
+					amount: evmAmount
+				});
 				patchStep('approve', {
 					status: 'done',
 					endedAt: Date.now(),
 					hash,
-					hashUrl: `${BASE.explorer}/tx/${hash}`,
+					hashUrl: `${evmCfg.explorer}/tx/${hash}`,
 					detail: 'allowance set'
 				});
 			} else {
@@ -233,12 +256,13 @@ export function createTransferStore(initial: Direction = 'stellar-to-base') {
 			return fail(errMsg(err));
 		}
 
-		// Burn on Base
+		// Burn on EVM
 		state.phase = 'burning';
 		patchStep('burn', { status: 'active', startedAt: Date.now() });
 		let burnHash: `0x${string}`;
 		try {
 			burnHash = await depositForBurnWithHookToStellar({
+				chainId: args.evmChainId,
 				wallet: args.evmWallet,
 				amount: evmAmount,
 				stellarRecipient: args.stellarAddress
@@ -250,19 +274,20 @@ export function createTransferStore(initial: Direction = 'stellar-to-base') {
 			status: 'done',
 			endedAt: Date.now(),
 			hash: burnHash,
-			hashUrl: `${BASE.explorer}/tx/${burnHash}`
+			hashUrl: `${evmCfg.explorer}/tx/${burnHash}`
 		});
 
-		// Attest (Base finality ~15min for Standard)
+		// Attest
 		state.phase = 'attesting';
+		const finalityNote = finalityHint(args.evmChainId);
 		patchStep('attest', {
 			status: 'active',
 			startedAt: Date.now(),
-			detail: 'Base finality is ~15 min for Standard transfers'
+			detail: finalityNote
 		});
 		let attest: IrisMessage;
 		try {
-			attest = await pollAttestation(BASE.domain, burnHash, {
+			attest = await pollAttestation(evmCfg.domain, burnHash, {
 				onProgress: ({ elapsedMs, status }) => {
 					patchStep('attest', {
 						detail: `${Math.round(elapsedMs / 1000)}s · ${status}`
@@ -301,14 +326,16 @@ export function createTransferStore(initial: Direction = 'stellar-to-base') {
 	async function start(args: {
 		stellarAddress: string;
 		evmWallet: EvmWallet;
+		evmChainId: EvmChainId;
 		amount: string;
 	}) {
 		state.error = null;
-		state.steps = stepsFor(state.direction);
-		if (state.direction === 'stellar-to-base') {
-			await runStellarToBase(args);
+		state.evmChainId = args.evmChainId;
+		state.steps = stepsFor(state.direction, args.evmChainId);
+		if (state.direction === 'stellar-to-evm') {
+			await runStellarToEvm(args);
 		} else {
-			await runBaseToStellar(args);
+			await runEvmToStellar(args);
 		}
 	}
 
@@ -316,10 +343,17 @@ export function createTransferStore(initial: Direction = 'stellar-to-base') {
 		get state() {
 			return state;
 		},
-		setDirection,
+		setShape,
 		reset,
 		start
 	};
+}
+
+function finalityHint(chainId: EvmChainId): string {
+	if (chainId === 'arc') {
+		return "Arc finality is fast — typically under a minute.";
+	}
+	return 'Base finality is ~15 min for Standard transfers.';
 }
 
 function errMsg(err: unknown): string {

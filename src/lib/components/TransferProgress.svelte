@@ -10,7 +10,8 @@
 	onDestroy(() => clearInterval(tick));
 
 	const LONG_WAIT_KEY = 'attest';
-	const LONG_WAIT_DIRECTION = 'base-to-stellar';
+	const LONG_WAIT_DIRECTION = 'evm-to-stellar';
+	const LONG_WAIT_CHAIN = 'base';
 	// Mean Base Sepolia → Sepolia finality, used for the estimate countdown.
 	const LONG_WAIT_TARGET_MS = 15 * 60_000;
 
@@ -40,7 +41,8 @@
 		return (
 			stepKey === LONG_WAIT_KEY &&
 			status === 'active' &&
-			transfer.direction === LONG_WAIT_DIRECTION
+			transfer.direction === LONG_WAIT_DIRECTION &&
+			transfer.evmChainId === LONG_WAIT_CHAIN
 		);
 	}
 </script>

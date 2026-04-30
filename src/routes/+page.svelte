@@ -7,7 +7,7 @@
 	import { createTransferStore } from '$lib/stores/transfer.svelte';
 	import type { FreighterState } from '$lib/stellar/freighter';
 	import type { EvmWallet } from '$lib/evm/wallet';
-	import type { Direction } from '$lib/config';
+	import { DEFAULT_EVM_CHAIN, EVM_CHAINS, type Direction, type EvmChainId } from '$lib/config';
 
 	let stellar = $state<FreighterState>({
 		installed: false,
@@ -15,13 +15,15 @@
 		networkPassphrase: null
 	});
 	let evm = $state<EvmWallet | null>(null);
-	let direction = $state<Direction>('stellar-to-base');
+	let evmChainId = $state<EvmChainId>(DEFAULT_EVM_CHAIN);
+	let direction = $state<Direction>('stellar-to-evm');
 	let amount = $state('');
 
-	const transfer = createTransferStore('stellar-to-base');
+	const transfer = createTransferStore('stellar-to-evm', DEFAULT_EVM_CHAIN);
 
+	// One effect, no store-state reads inside — avoids effect_update_depth_exceeded.
 	$effect(() => {
-		transfer.setDirection(direction);
+		transfer.setShape({ direction, evmChainId });
 	});
 
 	let bothConnected = $derived(!!stellar.address && !!evm);
@@ -32,11 +34,14 @@
 	);
 	let canSubmit = $derived(bothConnected && amount.trim() !== '' && !busy);
 
+	let evmLabel = $derived(EVM_CHAINS[evmChainId].label);
+
 	async function send() {
 		if (!stellar.address || !evm) return;
 		await transfer.start({
 			stellarAddress: stellar.address,
 			evmWallet: evm,
+			evmChainId,
 			amount: amount.trim()
 		});
 	}
@@ -51,20 +56,21 @@
 	<header class="header">
 		<h1 class="title">CCTP Demo</h1>
 		<p class="subtitle">
-			Bridge USDC between Stellar testnet and Base Sepolia using Circle's
-			Cross-Chain Transfer Protocol V2.
+			Bridge USDC between Stellar testnet and any CCTP-supported EVM chain
+			using Circle's Cross-Chain Transfer Protocol V2.
 		</p>
 	</header>
 
 	<div class="wallets">
 		<StellarPanel bind:freighter={stellar} />
-		<EvmPanel bind:wallet={evm} />
+		<EvmPanel bind:wallet={evm} bind:chainId={evmChainId} disabled={busy} />
 	</div>
 
 	<section class="action">
-		<DirectionSwitcher bind:direction disabled={busy} />
+		<DirectionSwitcher bind:direction disabled={busy} {evmLabel} />
 		<TransferForm
 			{direction}
+			{evmLabel}
 			bind:amount
 			disabled={busy}
 			{busy}

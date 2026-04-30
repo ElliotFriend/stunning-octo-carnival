@@ -9,7 +9,6 @@ import {
 import { Buffer } from 'buffer';
 import {
 	STELLAR,
-	BASE,
 	CCTP_CANONICAL_DECIMALS,
 	FINALIZED_THRESHOLD,
 	STELLAR_MAX_FEE
@@ -25,6 +24,7 @@ const forwarder = new Contract(STELLAR.contracts.cctpForwarder);
 export async function depositForBurnToBase(args: {
 	caller: string;
 	amount: bigint; // Stellar 7-decimal subunits
+	destinationDomain: number;
 	evmRecipient: `0x${string}`;
 }): Promise<{ hash: string; sourceDomain: number }> {
 	const account = await stellarRpc.getAccount(args.caller);
@@ -41,7 +41,7 @@ export async function depositForBurnToBase(args: {
 				'deposit_for_burn',
 				Address.fromString(args.caller).toScVal(),
 				nativeToScVal(args.amount, { type: 'i128' }),
-				nativeToScVal(BASE.domain, { type: 'u32' }),
+				nativeToScVal(args.destinationDomain, { type: 'u32' }),
 				bytesN32(mintRecipient),
 				Address.fromString(STELLAR.contracts.usdc).toScVal(),
 				bytesN32(destinationCaller),

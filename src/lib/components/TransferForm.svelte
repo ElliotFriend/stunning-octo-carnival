@@ -3,6 +3,7 @@
 
 	let {
 		direction,
+		evmLabel = 'EVM',
 		amount = $bindable<string>(''),
 		disabled = false,
 		busy = false,
@@ -10,6 +11,7 @@
 		onsubmit
 	}: {
 		direction: Direction;
+		evmLabel?: string;
 		amount?: string;
 		disabled?: boolean;
 		busy?: boolean;
@@ -22,12 +24,13 @@
 		if (canSubmit && !busy) onsubmit();
 	}
 
+	let evmShort = $derived(evmLabel.split(' ')[0]);
 	let buttonLabel = $derived(
 		busy
 			? 'Working…'
-			: direction === 'stellar-to-base'
-				? 'Send Stellar → Base'
-				: 'Send Base → Stellar'
+			: direction === 'stellar-to-evm'
+				? `Send Stellar → ${evmShort}`
+				: `Send ${evmShort} → Stellar`
 	);
 </script>
 

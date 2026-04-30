@@ -2,24 +2,27 @@
 	import type { Direction } from '$lib/config';
 
 	let {
-		direction = $bindable<Direction>('stellar-to-base'),
+		direction = $bindable<Direction>('stellar-to-evm'),
+		evmLabel = 'EVM',
 		disabled = false
-	}: { direction?: Direction; disabled?: boolean } = $props();
+	}: { direction?: Direction; evmLabel?: string; disabled?: boolean } = $props();
 
 	function flip() {
-		direction = direction === 'stellar-to-base' ? 'base-to-stellar' : 'stellar-to-base';
+		direction = direction === 'stellar-to-evm' ? 'evm-to-stellar' : 'stellar-to-evm';
 	}
+
+	let evmShort = $derived(evmLabel.split(' ')[0]);
 </script>
 
 <div class="switcher">
 	<span class="from">
-		{direction === 'stellar-to-base' ? 'Stellar' : 'Base'}
+		{direction === 'stellar-to-evm' ? 'Stellar' : evmShort}
 	</span>
 	<button class="flip" onclick={flip} {disabled} aria-label="Flip direction">
 		⇄
 	</button>
 	<span class="to">
-		{direction === 'stellar-to-base' ? 'Base' : 'Stellar'}
+		{direction === 'stellar-to-evm' ? evmShort : 'Stellar'}
 	</span>
 </div>
 

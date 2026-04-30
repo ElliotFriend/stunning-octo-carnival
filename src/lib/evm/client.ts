@@ -1,7 +1,13 @@
-import { createPublicClient, http } from 'viem';
-import { BASE } from '$lib/config';
+import { createPublicClient, http, type PublicClient } from 'viem';
+import { EVM_CHAINS, type EvmChainId } from '$lib/config';
 
-export const publicClient = createPublicClient({
-	chain: BASE.chain,
-	transport: http()
-});
+const cache = new Map<EvmChainId, PublicClient>();
+
+export function getPublicClient(chainId: EvmChainId): PublicClient {
+	const cached = cache.get(chainId);
+	if (cached) return cached;
+	const cfg = EVM_CHAINS[chainId];
+	const client = createPublicClient({ chain: cfg.chain, transport: http() }) as PublicClient;
+	cache.set(chainId, client);
+	return client;
+}

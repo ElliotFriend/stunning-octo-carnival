@@ -1,13 +1,14 @@
-import {
-	concatHex,
-	pad,
-	stringToHex,
-	toHex,
-	type Hex
-} from 'viem';
+import { concatHex, pad, stringToHex, toHex, type Hex } from 'viem';
 import { StrKey } from '@stellar/stellar-sdk';
-import { BASE, STELLAR, FINALIZED_THRESHOLD, EVM_MAX_FEE } from '$lib/config';
-import { publicClient } from './client';
+import {
+	EVM_CCTP_CONTRACTS,
+	EVM_CHAINS,
+	FINALIZED_THRESHOLD,
+	EVM_MAX_FEE,
+	STELLAR,
+	type EvmChainId
+} from '$lib/config';
+import { getPublicClient } from './client';
 import type { EvmWallet } from './wallet';
 
 // Minimal ABIs for the V2 contracts. Full ABIs are large and we only call
@@ -77,47 +78,51 @@ export function strkeyToBytes32(strkey: string): Hex {
 }
 
 export async function depositForBurnWithHookToStellar(args: {
+	chainId: EvmChainId;
 	wallet: EvmWallet;
 	amount: bigint;
 	stellarRecipient: string;
 }): Promise<`0x${string}`> {
+	const cfg = EVM_CHAINS[args.chainId];
 	const forwarderBytes32 = strkeyToBytes32(STELLAR.contracts.cctpForwarder);
 	const hookData = encodeStellarForwarderHookData(args.stellarRecipient);
 
 	const hash = await args.wallet.walletClient.writeContract({
 		account: args.wallet.address,
-		chain: BASE.chain,
-		address: BASE.contracts.tokenMessengerV2,
+		chain: cfg.chain,
+		address: EVM_CCTP_CONTRACTS.tokenMessengerV2,
 		abi: tokenMessengerV2Abi,
 		functionName: 'depositForBurnWithHook',
 		args: [
 			args.amount,
 			STELLAR.domain,
 			forwarderBytes32,
-			BASE.contracts.usdc,
+			cfg.usdc,
 			forwarderBytes32, // destinationCaller MUST equal mintRecipient (the forwarder)
 			EVM_MAX_FEE,
 			FINALIZED_THRESHOLD,
 			hookData
 		]
 	});
-	await publicClient.waitForTransactionReceipt({ hash });
+	await getPublicClient(args.chainId).waitForTransactionReceipt({ hash });
 	return hash;
 }
 
-export async function receiveMessageOnBase(args: {
+export async function receiveMessageOnEvm(args: {
+	chainId: EvmChainId;
 	wallet: EvmWallet;
 	message: Hex;
 	attestation: Hex;
 }): Promise<`0x${string}`> {
+	const cfg = EVM_CHAINS[args.chainId];
 	const hash = await args.wallet.walletClient.writeContract({
 		account: args.wallet.address,
-		chain: BASE.chain,
-		address: BASE.contracts.messageTransmitterV2,
+		chain: cfg.chain,
+		address: EVM_CCTP_CONTRACTS.messageTransmitterV2,
 		abi: messageTransmitterV2Abi,
 		functionName: 'receiveMessage',
 		args: [args.message, args.attestation]
 	});
-	await publicClient.waitForTransactionReceipt({ hash });
+	await getPublicClient(args.chainId).waitForTransactionReceipt({ hash });
 	return hash;
 }

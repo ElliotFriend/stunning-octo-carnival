@@ -2,32 +2,48 @@
 	import {
 		connectEvm,
 		disconnectEvm,
-		ensureBaseSepolia,
+		ensureChain,
 		type EvmWallet
 	} from '$lib/evm/wallet';
 	import { formatEvmUsdc, getEvmUsdcBalance } from '$lib/evm/usdc';
-	import { BASE } from '$lib/config';
+	import { EVM_CHAINS, type EvmChainId } from '$lib/config';
 
-	let { wallet = $bindable<EvmWallet | null>(null) } = $props();
+	let {
+		wallet = $bindable<EvmWallet | null>(null),
+		chainId = $bindable<EvmChainId>('arc'),
+		disabled = false
+	}: {
+		wallet?: EvmWallet | null;
+		chainId?: EvmChainId;
+		disabled?: boolean;
+	} = $props();
 
 	let balance = $state<bigint | null>(null);
 	let balanceError = $state<string | null>(null);
 	let connecting = $state(false);
 	let connectError = $state<string | null>(null);
 
+	let selectedCfg = $derived(EVM_CHAINS[chainId]);
+	let onCorrectChain = $derived(!!wallet && wallet.chainId === selectedCfg.chain.id);
+
 	async function refreshBalance() {
 		if (!wallet) return;
 		balanceError = null;
 		try {
-			balance = await getEvmUsdcBalance(wallet.address);
+			balance = await getEvmUsdcBalance(chainId, wallet.address);
 		} catch (err) {
 			balanceError = err instanceof Error ? err.message : String(err);
 		}
 	}
 
 	$effect(() => {
-		if (wallet) refreshBalance();
-		else balance = null;
+		// Re-read balance when wallet OR selected chain changes.
+		if (wallet) {
+			void chainId;
+			refreshBalance();
+		} else {
+			balance = null;
+		}
 	});
 
 	async function connect() {
@@ -35,13 +51,29 @@
 		connectError = null;
 		try {
 			let w = await connectEvm();
-			w = await ensureBaseSepolia(w);
+			w = await ensureChain(w, chainId);
 			wallet = w;
 		} catch (err) {
 			connectError = err instanceof Error ? err.message : String(err);
 		} finally {
 			connecting = false;
 		}
+	}
+
+	async function switchChain() {
+		if (!wallet) return;
+		connectError = null;
+		try {
+			wallet = await ensureChain(wallet, chainId);
+		} catch (err) {
+			connectError = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	async function pickChain(id: EvmChainId) {
+		if (id === chainId) return;
+		chainId = id;
+		if (wallet) await switchChain();
 	}
 
 	async function disconnect() {
@@ -56,9 +88,25 @@
 
 <section class="panel">
 	<header class="head">
-		<span class="badge base">Base Sepolia</span>
-		<span class="muted">domain 6</span>
+		<span class="badge {chainId}">{selectedCfg.label}</span>
+		<span class="muted">domain {selectedCfg.domain}</span>
 	</header>
+
+	<div class="chain-picker" role="tablist" aria-label="EVM chain">
+		{#each Object.values(EVM_CHAINS) as cfg (cfg.id)}
+			<button
+				type="button"
+				class="chip"
+				class:active={chainId === cfg.id}
+				disabled={disabled || connecting}
+				onclick={() => pickChain(cfg.id)}
+				role="tab"
+				aria-selected={chainId === cfg.id}
+			>
+				{cfg.label}
+			</button>
+		{/each}
+	</div>
 
 	{#if !wallet}
 		<button class="connect" onclick={connect} disabled={connecting}>
@@ -75,13 +123,18 @@
 		</div>
 		<div class="balance">
 			<span class="amount">
-				{balance === null ? '…' : formatEvmUsdc(balance)}
+				{balance === null ? '…' : formatEvmUsdc(chainId, balance)}
 			</span>
 			<span class="symbol">USDC</span>
 		</div>
-		{#if wallet.chainId !== BASE.chain.id}
-			<p class="warn">Wrong network — switch to {BASE.chain.name}.</p>
+		<p class="gas-note">{selectedCfg.gasNote}</p>
+		{#if !onCorrectChain}
+			<div class="wrong-chain">
+				<span>Wallet is on chain {wallet.chainId}, expected {selectedCfg.chain.id}.</span>
+				<button class="link" onclick={switchChain}>switch</button>
+			</div>
 		{/if}
+		{#if connectError}<p class="error">{connectError}</p>{/if}
 		{#if balanceError}<p class="error">{balanceError}</p>{/if}
 	{/if}
 </section>
@@ -94,7 +147,7 @@
 		padding: 1.25rem;
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 0.85rem;
 		min-height: 160px;
 	}
 
@@ -113,6 +166,11 @@
 		border-radius: 999px;
 	}
 
+	.badge.arc {
+		background: color-mix(in srgb, var(--arc) 18%, transparent);
+		color: var(--arc);
+	}
+
 	.badge.base {
 		background: color-mix(in srgb, var(--base) 30%, transparent);
 		color: #94b8ff;
@@ -122,6 +180,34 @@
 		color: var(--text-dim);
 		font-size: 0.85rem;
 		font-family: var(--mono);
+	}
+
+	.chain-picker {
+		display: flex;
+		gap: 0.4rem;
+	}
+
+	.chip {
+		flex: 1;
+		background: var(--bg-elev-2);
+		color: var(--text-muted);
+		border: 1px solid var(--border);
+		padding: 0.4rem 0.6rem;
+		border-radius: var(--radius);
+		font-size: 0.8rem;
+		font-weight: 500;
+		transition: all 120ms;
+	}
+
+	.chip:hover:not(:disabled) {
+		color: var(--text);
+		border-color: var(--border-strong);
+	}
+
+	.chip.active {
+		background: var(--accent-dim);
+		color: var(--text);
+		border-color: var(--accent);
 	}
 
 	.connect {
@@ -186,15 +272,25 @@
 		color: var(--text-muted);
 	}
 
+	.gas-note {
+		margin: 0;
+		font-size: 0.78rem;
+		color: var(--text-dim);
+	}
+
 	.error {
 		color: var(--error);
 		font-size: 0.85rem;
 		margin: 0;
+		word-break: break-word;
 	}
 
-	.warn {
+	.wrong-chain {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		font-size: 0.8rem;
 		color: var(--warning);
-		font-size: 0.85rem;
-		margin: 0;
 	}
 </style>
