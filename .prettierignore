@@ -7,3 +7,6 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Claude Code per-user state (rewritten by the CLI)
+.claude/

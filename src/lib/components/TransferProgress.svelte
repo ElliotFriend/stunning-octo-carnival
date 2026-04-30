@@ -70,7 +70,12 @@
                         <div class="detail">{step.detail}</div>
                     {/if}
                     {#if step.hash}
-                        <a class="tx-link" href={step.hashUrl} target="_blank" rel="noreferrer">
+                        <a
+                            class="tx-link"
+                            href={step.hashUrl}
+                            target="_blank"
+                            rel="external noreferrer"
+                        >
                             <code>{shortHash(step.hash)}</code>
                             <span class="ext">↗</span>
                         </a>
