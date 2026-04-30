@@ -37,6 +37,7 @@ export type TransferState = {
     amount: string;
     steps: Step[];
     error: string | null;
+    attestation: IrisMessage | null;
 };
 
 const initialState = (
@@ -51,6 +52,7 @@ const initialState = (
     amount: '',
     steps: stepsFor(direction, evmChainId, outboundFlow),
     error: null,
+    attestation: null,
 });
 
 function stepsFor(
@@ -86,25 +88,16 @@ function stepsFor(
     ];
 }
 
+const stellarTxUrl = (hash: string) => `${STELLAR.explorer}/tx/${hash}`;
+const evmTxUrl = (chainId: EvmChainId, hash: string) =>
+    `${EVM_CHAINS[chainId].explorer}/tx/${hash}`;
+
 export function createTransferStore(
     initialDirection: Direction,
     initialEvmChain: EvmChainId,
     initialFlow: OutboundFlow,
 ) {
     let state = $state<TransferState>(initialState(initialDirection, initialEvmChain, initialFlow));
-
-    // Atomic reset: takes the full shape so callers don't have to read
-    // existing store state to update one field. The whole `state` object is
-    // replaced with a fresh `initialState`, which guarantees `phase`, `steps`,
-    // `error`, and `amount` are consistent with the new shape — no per-field
-    // patching required by the caller.
-    function setShape(shape: {
-        direction: Direction;
-        evmChainId: EvmChainId;
-        outboundFlow: OutboundFlow;
-    }) {
-        state = initialState(shape.direction, shape.evmChainId, shape.outboundFlow);
-    }
 
     function reset() {
         state = initialState(state.direction, state.evmChainId, state.outboundFlow);
@@ -120,6 +113,27 @@ export function createTransferStore(
         state.steps = state.steps.map((s) =>
             s.status === 'active' ? { ...s, status: 'error', endedAt: Date.now() } : s,
         );
+    }
+
+    // Generic wrapper around a single step in the runner. Owns the active/done
+    // status transitions and error funnel so the per-direction sequence below
+    // is just a list of `await performStep(...)` calls. Returns null on
+    // failure — callers bail out of the runner immediately when that happens.
+    async function performStep<T>(
+        phase: Phase,
+        key: Step['key'],
+        op: () => Promise<{ result: T; patch?: Partial<Step> }>,
+    ): Promise<T | null> {
+        state.phase = phase;
+        patchStep(key, { status: 'active', startedAt: Date.now() });
+        try {
+            const { result, patch } = await op();
+            patchStep(key, { status: 'done', endedAt: Date.now(), ...patch });
+            return result;
+        } catch (err) {
+            fail(errMsg(err));
+            return null;
+        }
     }
 
     async function runStellarToEvm(args: {
@@ -138,115 +152,88 @@ export function createTransferStore(
             // Approve + burn in one Soroban transaction via the wrapper contract.
             // Soroban's auth tree authorizes both inner calls from a single
             // Freighter signature.
-            state.phase = 'burning';
-            patchStep('burn', { status: 'active', startedAt: Date.now() });
-            try {
-                const result = await bridgeUsdcToEvm({
+            const h = await performStep('burning', 'burn', async () => {
+                const r = await bridgeUsdcToEvm({
                     caller: args.stellarAddress,
                     amount: stellarAmount,
                     destinationDomain: evmCfg.domain,
                     evmRecipient: args.evmWallet.address,
                 });
-                burnHash = result.hash;
-            } catch (err) {
-                return fail(errMsg(err));
-            }
-            patchStep('burn', {
-                status: 'done',
-                endedAt: Date.now(),
-                hash: burnHash,
-                hashUrl: `${STELLAR.explorer}/tx/${burnHash}`,
+                return {
+                    result: r.hash,
+                    patch: { hash: r.hash, hashUrl: stellarTxUrl(r.hash) },
+                };
             });
+            if (h === null) return;
+            burnHash = h;
         } else {
             // Plain CCTP: approve, then deposit_for_burn. Two Freighter prompts,
             // two on-chain Soroban transactions.
-            state.phase = 'approving';
-            patchStep('approve', { status: 'active', startedAt: Date.now() });
-            try {
+            const approved = await performStep('approving', 'approve', async () => {
                 const existing = await getUsdcAllowance({
                     from: args.stellarAddress,
                     spender: STELLAR.contracts.tokenMessengerMinter,
                 });
-                if (existing < stellarAmount) {
-                    const hash = await approveUsdc({
-                        from: args.stellarAddress,
-                        spender: STELLAR.contracts.tokenMessengerMinter,
-                        amount: stellarAmount,
-                    });
-                    patchStep('approve', {
-                        status: 'done',
-                        endedAt: Date.now(),
-                        hash,
-                        hashUrl: `${STELLAR.explorer}/tx/${hash}`,
-                        detail: 'allowance set',
-                    });
-                } else {
-                    patchStep('approve', {
-                        status: 'done',
-                        endedAt: Date.now(),
-                        detail: 'sufficient allowance already set',
-                    });
+                if (existing >= stellarAmount) {
+                    return {
+                        result: true,
+                        patch: { detail: 'sufficient allowance already set' },
+                    };
                 }
-            } catch (err) {
-                return fail(errMsg(err));
-            }
+                const hash = await approveUsdc({
+                    from: args.stellarAddress,
+                    spender: STELLAR.contracts.tokenMessengerMinter,
+                    amount: stellarAmount,
+                });
+                return {
+                    result: true,
+                    patch: { hash, hashUrl: stellarTxUrl(hash), detail: 'allowance set' },
+                };
+            });
+            if (approved === null) return;
 
-            state.phase = 'burning';
-            patchStep('burn', { status: 'active', startedAt: Date.now() });
-            try {
-                const result = await depositForBurnToEvm({
+            const h = await performStep('burning', 'burn', async () => {
+                const r = await depositForBurnToEvm({
                     caller: args.stellarAddress,
                     amount: stellarAmount,
                     destinationDomain: evmCfg.domain,
                     evmRecipient: args.evmWallet.address,
                 });
-                burnHash = result.hash;
-            } catch (err) {
-                return fail(errMsg(err));
-            }
-            patchStep('burn', {
-                status: 'done',
-                endedAt: Date.now(),
-                hash: burnHash,
-                hashUrl: `${STELLAR.explorer}/tx/${burnHash}`,
+                return {
+                    result: r.hash,
+                    patch: { hash: r.hash, hashUrl: stellarTxUrl(r.hash) },
+                };
             });
+            if (h === null) return;
+            burnHash = h;
         }
 
-        // Attest
-        state.phase = 'attesting';
-        patchStep('attest', { status: 'active', startedAt: Date.now() });
-        let attest: IrisMessage;
-        try {
-            attest = await pollAttestation(STELLAR.domain, burnHash, {
+        const attest = await performStep<IrisMessage>('attesting', 'attest', async () => {
+            const r = await pollAttestation(STELLAR.domain, burnHash, {
                 onProgress: ({ elapsedMs, status }) => {
-                    patchStep('attest', { detail: `${Math.round(elapsedMs / 1000)}s · ${status}` });
+                    patchStep('attest', {
+                        detail: `${Math.round(elapsedMs / 1000)}s · ${status}`,
+                    });
                 },
             });
-        } catch (err) {
-            return fail(errMsg(err));
-        }
-        patchStep('attest', { status: 'done', endedAt: Date.now(), detail: 'attested' });
+            return { result: r, patch: { detail: 'attested' } };
+        });
+        if (attest === null) return;
+        state.attestation = attest;
 
-        // Mint on the destination EVM chain
-        state.phase = 'minting';
-        patchStep('mint', { status: 'active', startedAt: Date.now() });
-        let mintHash: `0x${string}`;
-        try {
-            mintHash = await receiveMessageOnEvm({
+        const mintHash = await performStep('minting', 'mint', async () => {
+            const hash = await receiveMessageOnEvm({
                 chainId: args.evmChainId,
                 wallet: args.evmWallet,
                 message: attest.message,
                 attestation: attest.attestation,
             });
-        } catch (err) {
-            return fail(errMsg(err));
-        }
-        patchStep('mint', {
-            status: 'done',
-            endedAt: Date.now(),
-            hash: mintHash,
-            hashUrl: `${evmCfg.explorer}/tx/${mintHash}`,
+            return {
+                result: hash,
+                patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) },
+            };
         });
+        if (mintHash === null) return;
 
         state.phase = 'done';
     }
@@ -261,140 +248,201 @@ export function createTransferStore(
         const evmAmount = parseEvmUsdc(args.evmChainId, args.amount);
         const evmCfg = EVM_CHAINS[args.evmChainId];
 
-        // Approve if needed
-        state.phase = 'approving';
-        patchStep('approve', { status: 'active', startedAt: Date.now() });
-        try {
+        const approved = await performStep('approving', 'approve', async () => {
             const allowance = await getEvmUsdcAllowance(
                 args.evmChainId,
                 args.evmWallet.address,
                 EVM_CCTP_CONTRACTS.tokenMessengerV2,
             );
-            if (allowance < evmAmount) {
-                const hash = await approveEvmUsdc({
-                    chainId: args.evmChainId,
-                    wallet: args.evmWallet,
-                    spender: EVM_CCTP_CONTRACTS.tokenMessengerV2,
-                    amount: evmAmount,
-                });
-                patchStep('approve', {
-                    status: 'done',
-                    endedAt: Date.now(),
-                    hash,
-                    hashUrl: `${evmCfg.explorer}/tx/${hash}`,
-                    detail: 'allowance set',
-                });
-            } else {
-                patchStep('approve', {
-                    status: 'done',
-                    endedAt: Date.now(),
-                    detail: 'sufficient allowance already set',
-                });
+            if (allowance >= evmAmount) {
+                return {
+                    result: true,
+                    patch: { detail: 'sufficient allowance already set' },
+                };
             }
-        } catch (err) {
-            return fail(errMsg(err));
-        }
+            const hash = await approveEvmUsdc({
+                chainId: args.evmChainId,
+                wallet: args.evmWallet,
+                spender: EVM_CCTP_CONTRACTS.tokenMessengerV2,
+                amount: evmAmount,
+            });
+            return {
+                result: true,
+                patch: {
+                    hash,
+                    hashUrl: evmTxUrl(args.evmChainId, hash),
+                    detail: 'allowance set',
+                },
+            };
+        });
+        if (approved === null) return;
 
-        // Burn on EVM
-        state.phase = 'burning';
-        patchStep('burn', { status: 'active', startedAt: Date.now() });
-        let burnHash: `0x${string}`;
-        try {
-            burnHash = await depositForBurnWithHookToStellar({
+        const burnHash = await performStep('burning', 'burn', async () => {
+            const hash = await depositForBurnWithHookToStellar({
                 chainId: args.evmChainId,
                 wallet: args.evmWallet,
                 amount: evmAmount,
                 stellarRecipient: args.stellarAddress,
             });
-        } catch (err) {
-            return fail(errMsg(err));
-        }
-        patchStep('burn', {
-            status: 'done',
-            endedAt: Date.now(),
-            hash: burnHash,
-            hashUrl: `${evmCfg.explorer}/tx/${burnHash}`,
+            return {
+                result: hash,
+                patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) },
+            };
         });
+        if (burnHash === null) return;
 
-        // Attest
-        state.phase = 'attesting';
         const finalityNote = finalityHint(args.evmChainId);
-        patchStep('attest', {
-            status: 'active',
-            startedAt: Date.now(),
-            detail: finalityNote,
-        });
-        let attest: IrisMessage;
-        try {
-            attest = await pollAttestation(evmCfg.domain, burnHash, {
+        patchStep('attest', { detail: finalityNote });
+        const attest = await performStep<IrisMessage>('attesting', 'attest', async () => {
+            const r = await pollAttestation(evmCfg.domain, burnHash, {
                 onProgress: ({ elapsedMs, status }) => {
                     patchStep('attest', {
                         detail: `${Math.round(elapsedMs / 1000)}s · ${status}`,
                     });
                 },
             });
-        } catch (err) {
-            return fail(errMsg(err));
-        }
-        patchStep('attest', { status: 'done', endedAt: Date.now(), detail: 'attested' });
+            return { result: r, patch: { detail: 'attested' } };
+        });
+        if (attest === null) return;
+        state.attestation = attest;
 
-        // Mint via forwarder on Stellar (signed by user but permissionless)
-        state.phase = 'minting';
-        patchStep('mint', { status: 'active', startedAt: Date.now() });
-        let mintHash: string;
-        try {
+        const mintHash = await performStep('minting', 'mint', async () => {
             const r = await mintAndForward({
                 caller: args.stellarAddress,
                 message: hexToBytes(attest.message as Hex),
                 attestation: hexToBytes(attest.attestation as Hex),
             });
-            mintHash = r.hash;
-        } catch (err) {
-            return fail(errMsg(err));
-        }
-        patchStep('mint', {
-            status: 'done',
-            endedAt: Date.now(),
-            hash: mintHash,
-            hashUrl: `${STELLAR.explorer}/tx/${mintHash}`,
+            return {
+                result: r.hash,
+                patch: { hash: r.hash, hashUrl: stellarTxUrl(r.hash) },
+            };
         });
+        if (mintHash === null) return;
 
         state.phase = 'done';
     }
 
     async function start(args: {
+        direction: Direction;
         stellarAddress: string;
         evmWallet: EvmWallet;
         evmChainId: EvmChainId;
         outboundFlow: OutboundFlow;
         amount: string;
     }) {
-        state.error = null;
+        state.direction = args.direction;
         state.evmChainId = args.evmChainId;
         state.outboundFlow = args.outboundFlow;
-        state.steps = stepsFor(state.direction, args.evmChainId, args.outboundFlow);
-        if (state.direction === 'stellar-to-evm') {
+        state.steps = stepsFor(args.direction, args.evmChainId, args.outboundFlow);
+        state.error = null;
+        state.amount = '';
+        state.attestation = null;
+        if (args.direction === 'stellar-to-evm') {
             await runStellarToEvm(args);
         } else {
             await runEvmToStellar(args);
         }
     }
 
+    // Pick up an interrupted (or third-party) transfer at the attest step.
+    // The wrapper-vs-two-tx distinction only matters for the burn we're
+    // skipping, so we always render the two-tx step list with approve+burn
+    // pre-marked done.
+    async function resume(args: {
+        burnHash: string;
+        direction: Direction;
+        stellarAddress: string;
+        evmWallet: EvmWallet;
+        evmChainId: EvmChainId;
+    }) {
+        state.direction = args.direction;
+        state.evmChainId = args.evmChainId;
+        state.outboundFlow = 'two-tx';
+        state.error = null;
+        state.attestation = null;
+        state.amount = '';
+
+        const stellarSource = args.direction === 'stellar-to-evm';
+        const burnHashUrl = stellarSource
+            ? stellarTxUrl(args.burnHash)
+            : evmTxUrl(args.evmChainId, args.burnHash);
+
+        state.steps = stepsFor(args.direction, args.evmChainId, 'two-tx').map((s) => {
+            if (s.key === 'approve') {
+                return { ...s, status: 'done', detail: 'skipped (resumed)' };
+            }
+            if (s.key === 'burn') {
+                return {
+                    ...s,
+                    status: 'done',
+                    detail: 'skipped (resumed)',
+                    hash: args.burnHash,
+                    hashUrl: burnHashUrl,
+                };
+            }
+            return s;
+        });
+
+        const sourceDomain = stellarSource ? STELLAR.domain : EVM_CHAINS[args.evmChainId].domain;
+
+        const attest = await performStep<IrisMessage>('attesting', 'attest', async () => {
+            const r = await pollAttestation(sourceDomain, args.burnHash, {
+                onProgress: ({ elapsedMs, status }) => {
+                    patchStep('attest', {
+                        detail: `${Math.round(elapsedMs / 1000)}s · ${status}`,
+                    });
+                },
+            });
+            return { result: r, patch: { detail: 'attested' } };
+        });
+        if (attest === null) return;
+        state.attestation = attest;
+
+        const mintHash = await performStep('minting', 'mint', async () => {
+            if (stellarSource) {
+                const hash = await receiveMessageOnEvm({
+                    chainId: args.evmChainId,
+                    wallet: args.evmWallet,
+                    message: attest.message,
+                    attestation: attest.attestation,
+                });
+                return {
+                    result: hash,
+                    patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) },
+                };
+            }
+            const r = await mintAndForward({
+                caller: args.stellarAddress,
+                message: hexToBytes(attest.message as Hex),
+                attestation: hexToBytes(attest.attestation as Hex),
+            });
+            return {
+                result: r.hash,
+                patch: { hash: r.hash, hashUrl: stellarTxUrl(r.hash) },
+            };
+        });
+        if (mintHash === null) return;
+
+        state.phase = 'done';
+    }
+
     return {
         get state() {
             return state;
         },
-        setShape,
         reset,
         start,
+        resume,
     };
 }
 
 function finalityHint(chainId: EvmChainId): string {
-    if (chainId === 'arc') {
-        return 'Arc finality is fast — typically under a minute.';
+    const cfg = EVM_CHAINS[chainId];
+    if (!cfg.attestationEtaMs) {
+        return `${cfg.label} finality is fast — typically under a minute.`;
     }
-    return 'Base finality is ~15 min for Standard transfers.';
+    const minutes = Math.round(cfg.attestationEtaMs / 60_000);
+    return `${cfg.label} finality is ~${minutes} min for Standard transfers.`;
 }
 
 function errMsg(err: unknown): string {

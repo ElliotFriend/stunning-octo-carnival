@@ -1,4 +1,5 @@
 import { IRIS_API } from '$lib/config';
+import { sleep } from '$lib/utils';
 import type { Hex } from 'viem';
 
 export type IrisMessage = {
@@ -70,8 +71,4 @@ export async function pollAttestation(
         await sleep(interval);
     }
     throw new Error(`Attestation timed out after ${Math.round(timeout / 1000)}s`);
-}
-
-function sleep(ms: number) {
-    return new Promise((r) => setTimeout(r, ms));
 }

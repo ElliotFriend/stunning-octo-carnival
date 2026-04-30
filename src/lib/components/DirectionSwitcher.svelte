@@ -2,19 +2,17 @@
     import type { Direction } from '$lib/config';
 
     let {
-        direction,
-        onDirectionChange,
+        direction = $bindable<Direction>('stellar-to-evm'),
         evmLabel = 'EVM',
         disabled = false,
     }: {
-        direction: Direction;
-        onDirectionChange: (d: Direction) => void;
+        direction?: Direction;
         evmLabel?: string;
         disabled?: boolean;
     } = $props();
 
     function flip() {
-        onDirectionChange(direction === 'stellar-to-evm' ? 'evm-to-stellar' : 'stellar-to-evm');
+        direction = direction === 'stellar-to-evm' ? 'evm-to-stellar' : 'stellar-to-evm';
     }
 
     let evmShort = $derived(evmLabel.split(' ')[0]);

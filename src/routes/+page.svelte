@@ -4,6 +4,9 @@
     import DirectionSwitcher from '$lib/components/DirectionSwitcher.svelte';
     import TransferForm from '$lib/components/TransferForm.svelte';
     import TransferProgress from '$lib/components/TransferProgress.svelte';
+    import HookDataPreview from '$lib/components/HookDataPreview.svelte';
+    import StellarBurnPreview from '$lib/components/StellarBurnPreview.svelte';
+    import ResumeForm from '$lib/components/ResumeForm.svelte';
     import { createTransferStore } from '$lib/stores/transfer.svelte';
     import type { FreighterState } from '$lib/stellar/freighter';
     import type { EvmWallet } from '$lib/evm/wallet';
@@ -38,21 +41,6 @@
         DEFAULT_OUTBOUND_FLOW,
     );
 
-    function onDirectionChange(d: Direction) {
-        direction = d;
-        transfer.setShape({ direction: d, evmChainId, outboundFlow });
-    }
-
-    function onChainChange(id: EvmChainId) {
-        evmChainId = id;
-        transfer.setShape({ direction, evmChainId: id, outboundFlow });
-    }
-
-    function onFlowChange(flow: OutboundFlow) {
-        outboundFlow = flow;
-        transfer.setShape({ direction, evmChainId, outboundFlow: flow });
-    }
-
     let bothConnected = $derived(!!stellar.address && !!evm);
     let busy = $derived(
         transfer.state.phase !== 'idle' &&
@@ -66,6 +54,7 @@
     async function send() {
         if (!stellar.address || !evm) return;
         await transfer.start({
+            direction,
             stellarAddress: stellar.address,
             evmWallet: evm,
             evmChainId,
@@ -74,6 +63,20 @@
         });
         // Skip refetch on error — the burn may not have landed, and a failed RPC
         // call here would clobber the error state shown to the user.
+        if (transfer.state.phase === 'done') {
+            await Promise.all([stellarPanel?.refresh(), evmPanel?.refresh()]);
+        }
+    }
+
+    async function resume(burnHash: string) {
+        if (!stellar.address || !evm) return;
+        await transfer.resume({
+            burnHash,
+            direction,
+            stellarAddress: stellar.address,
+            evmWallet: evm,
+            evmChainId,
+        });
         if (transfer.state.phase === 'done') {
             await Promise.all([stellarPanel?.refresh(), evmPanel?.refresh()]);
         }
@@ -98,21 +101,20 @@
         <StellarPanel
             bind:this={stellarPanel}
             bind:freighter={stellar}
-            {outboundFlow}
-            {onFlowChange}
+            bind:outboundFlow
+            {direction}
             disabled={busy}
         />
         <EvmPanel
             bind:this={evmPanel}
             bind:wallet={evm}
-            chainId={evmChainId}
-            {onChainChange}
+            bind:chainId={evmChainId}
             disabled={busy}
         />
     </div>
 
     <section class="action">
-        <DirectionSwitcher {direction} {onDirectionChange} disabled={busy} {evmLabel} />
+        <DirectionSwitcher bind:direction disabled={busy} {evmLabel} />
         <TransferForm
             {direction}
             {evmLabel}
@@ -124,6 +126,21 @@
         />
         {#if !bothConnected}
             <p class="hint">Connect both wallets to enable transfers.</p>
+        {/if}
+        {#if direction === 'evm-to-stellar' && stellar.address && transfer.state.phase === 'idle'}
+            <HookDataPreview stellarRecipient={stellar.address} />
+        {/if}
+        {#if direction === 'stellar-to-evm' && stellar.address && evm && transfer.state.phase === 'idle'}
+            <StellarBurnPreview
+                stellarAddress={stellar.address}
+                evmRecipient={evm.address}
+                {evmChainId}
+                {amount}
+                {outboundFlow}
+            />
+        {/if}
+        {#if transfer.state.phase === 'idle'}
+            <ResumeForm {direction} {bothConnected} disabled={busy} onResume={resume} />
         {/if}
     </section>
 

@@ -5,7 +5,6 @@ import { baseSepolia } from 'viem/chains';
 export const STELLAR = {
     networkPassphrase: Networks.TESTNET,
     rpcUrl: 'https://soroban-testnet.stellar.org',
-    horizonUrl: 'https://horizon-testnet.stellar.org',
     domain: 27,
     explorer: 'https://stellar.expert/explorer/testnet',
     contracts: {
@@ -52,6 +51,11 @@ export type EvmChainConfig = {
     usdc: `0x${string}`;
     usdcDecimals: number;
     gasNote: string;
+    /**
+     * Approximate Circle attestation wait when this chain is the SOURCE of a
+     * burn. Undefined means "fast enough that a wait UI isn't needed."
+     */
+    attestationEtaMs?: number;
 };
 
 export const EVM_CHAINS: Record<'arc' | 'base', EvmChainConfig> = {
@@ -74,6 +78,7 @@ export const EVM_CHAINS: Record<'arc' | 'base', EvmChainConfig> = {
         usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
         usdcDecimals: 6,
         gasNote: 'Gas paid in ETH.',
+        attestationEtaMs: 15 * 60_000,
     },
 };
 

@@ -1,0 +1,580 @@
+<script lang="ts">
+    import { pad } from 'viem';
+    import {
+        EVM_CHAINS,
+        FINALIZED_THRESHOLD,
+        STELLAR,
+        STELLAR_MAX_FEE,
+        type EvmChainId,
+        type OutboundFlow,
+    } from '$lib/config';
+    import { parseUsdcStellar, formatUsdc } from '$lib/stellar/usdc';
+
+    let {
+        stellarAddress,
+        evmRecipient,
+        evmChainId,
+        amount,
+        outboundFlow,
+    }: {
+        stellarAddress: string;
+        evmRecipient: `0x${string}`;
+        evmChainId: EvmChainId;
+        amount: string;
+        outboundFlow: OutboundFlow;
+    } = $props();
+
+    type Parsed = { ok: true; raw: bigint } | { ok: false };
+
+    // parseUsdcStellar throws on invalid input; surface as a typed result so the
+    // template can show a placeholder for empty/invalid values without rendering
+    // an error.
+    let parsedAmount = $derived<Parsed>(
+        (() => {
+            const trimmed = amount.trim();
+            if (trimmed === '') return { ok: false };
+            try {
+                return { ok: true, raw: parseUsdcStellar(trimmed) };
+            } catch {
+                return { ok: false };
+            }
+        })(),
+    );
+
+    let chain = $derived(EVM_CHAINS[evmChainId]);
+
+    // The wrapper exposes these extra args ahead of the burn args (usdc + tmm
+    // routing addresses); the two-tx variant calls the TMM directly.
+    let isWrapper = $derived(outboundFlow === 'wrapper');
+
+    let contractAddress = $derived(
+        isWrapper ? STELLAR.contracts.bridgeWrapper : STELLAR.contracts.tokenMessengerMinter,
+    );
+    let contractLabel = $derived(
+        isWrapper ? 'CctpWrapper (user-deployed)' : 'TokenMessengerMinter',
+    );
+    let functionName = $derived(isWrapper ? 'approve_and_deposit' : 'deposit_for_burn');
+
+    // Padded mint_recipient is whatever 20-byte EVM address, left-padded to 32
+    // bytes — Soroban's `BytesN<32>` mirrors the raw 32-byte slot CCTP uses on
+    // the destination side.
+    let mintRecipientHex = $derived(pad(evmRecipient, { size: 32 }));
+
+    // 32 zero bytes signals "open" — anyone can call receiveMessage on the
+    // destination. Restricting it to a specific caller is a different mode we
+    // don't expose in the demo.
+    const ZERO_BYTES_32_HEX = `0x${'0'.repeat(64)}` as const;
+
+    function shortAddr(a: string, head = 6, tail = 4): string {
+        if (a.length <= head + tail + 1) return a;
+        return `${a.slice(0, head)}…${a.slice(-tail)}`;
+    }
+
+    function shortStrkey(a: string): string {
+        // G-addresses are long; trim them similarly to EVM addresses.
+        return shortAddr(a, 6, 6);
+    }
+
+    function shortContract(a: string): string {
+        // Soroban contract IDs (C…) are 56 chars; show a bit more on each side.
+        return shortAddr(a, 6, 6);
+    }
+</script>
+
+<section class="burn-preview">
+    <header class="head">
+        <h4 class="title">Burn invocation preview</h4>
+        <span class="sub">
+            What you're about to sign in Freighter, decoded into human-readable args.
+        </span>
+    </header>
+
+    <div class="meta">
+        <div class="meta-row">
+            <span class="meta-label">Contract</span>
+            <code class="meta-value" title={contractAddress}>{shortContract(contractAddress)}</code>
+            <span class="meta-aside">{contractLabel}</span>
+        </div>
+        <div class="meta-row">
+            <span class="meta-label">Function</span>
+            <code class="meta-value">{functionName}</code>
+        </div>
+        <div class="meta-row">
+            <span class="meta-label">Caller</span>
+            <code class="meta-value" title={stellarAddress}>{shortStrkey(stellarAddress)}</code>
+            <span class="meta-aside">
+                require_auth() on this address — Freighter prompts the user for this signature.
+            </span>
+        </div>
+    </div>
+
+    {#if isWrapper}
+        <p class="flow-note">
+            Wrapper flow — one Soroban tx, one Freighter prompt. Soroban's auth tree authorizes the
+            two inner calls below from this single signature.
+        </p>
+    {:else}
+        <p class="flow-note">
+            Two-tx flow — a separate <code>usdc.approve(...)</code> precedes this burn (skipped if allowance
+            is sufficient).
+        </p>
+    {/if}
+
+    <h5 class="section-title">Arguments</h5>
+    <ul class="rows">
+        {#if isWrapper}
+            <li class="row">
+                <span class="arg-name">usdc</span>
+                <span class="arg-type">Address</span>
+                <code class="arg-value" title={STELLAR.contracts.usdc}>
+                    {shortContract(STELLAR.contracts.usdc)}
+                </code>
+                <span class="arg-note"
+                    >Stellar USDC SAC — passed through to inner approve/burn.</span
+                >
+            </li>
+            <li class="row">
+                <span class="arg-name">tmm</span>
+                <span class="arg-type">Address</span>
+                <code class="arg-value" title={STELLAR.contracts.tokenMessengerMinter}>
+                    {shortContract(STELLAR.contracts.tokenMessengerMinter)}
+                </code>
+                <span class="arg-note">TokenMessengerMinter — invoked by the wrapper.</span>
+            </li>
+        {/if}
+
+        <li class="row">
+            <span class="arg-name">caller</span>
+            <span class="arg-type">Address</span>
+            <code class="arg-value" title={stellarAddress}>{shortStrkey(stellarAddress)}</code>
+        </li>
+
+        <li class="row">
+            <span class="arg-name">amount</span>
+            <span class="arg-type">i128</span>
+            {#if parsedAmount.ok}
+                <code class="arg-value">{parsedAmount.raw.toString()}</code>
+                <span class="arg-note">
+                    {formatUsdc(parsedAmount.raw)} USDC (Stellar 7-decimal subunits)
+                </span>
+            {:else}
+                <span class="arg-placeholder">Enter an amount above</span>
+            {/if}
+        </li>
+
+        <li class="row">
+            <span class="arg-name">destination_domain</span>
+            <span class="arg-type">u32</span>
+            <code class="arg-value">{chain.domain}</code>
+            <span class="arg-note">{chain.label}</span>
+        </li>
+
+        <li class="row wide">
+            <span class="arg-name">mint_recipient</span>
+            <span class="arg-type">BytesN&lt;32&gt;</span>
+            <code class="arg-hex">{mintRecipientHex}</code>
+            <span class="arg-note">→ {evmRecipient} on {chain.label}</span>
+        </li>
+
+        <li class="row">
+            <span class="arg-name">burn_token</span>
+            <span class="arg-type">Address</span>
+            <code class="arg-value" title={STELLAR.contracts.usdc}>
+                {shortContract(STELLAR.contracts.usdc)}
+            </code>
+            <span class="arg-note">Stellar USDC SAC</span>
+        </li>
+
+        <li class="row wide">
+            <span class="arg-name">destination_caller</span>
+            <span class="arg-type">BytesN&lt;32&gt;</span>
+            <code class="arg-hex">{ZERO_BYTES_32_HEX}</code>
+            <span class="arg-note">
+                open — any address can call receiveMessage on the destination.
+            </span>
+        </li>
+
+        <li class="row">
+            <span class="arg-name">max_fee</span>
+            <span class="arg-type">i128</span>
+            <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
+            <span class="arg-note">defensive cap</span>
+        </li>
+
+        <li class="row">
+            <span class="arg-name">min_finality_threshold</span>
+            <span class="arg-type">u32</span>
+            <code class="arg-value">{FINALIZED_THRESHOLD}</code>
+            <span class="arg-note">finalized</span>
+        </li>
+    </ul>
+
+    {#if isWrapper}
+        <details class="auth-tree" open>
+            <summary>Auth tree (one signature, two authorized inner calls)</summary>
+            <ol class="auth-list">
+                <li class="auth-call">
+                    <div class="auth-head">
+                        <code class="auth-target" title={STELLAR.contracts.usdc}>
+                            {shortContract(STELLAR.contracts.usdc)}
+                        </code>
+                        <span class="auth-dot">·</span>
+                        <code class="auth-fn">approve</code>
+                    </div>
+                    <ul class="auth-args">
+                        <li>
+                            <span class="arg-name">from</span>
+                            <span class="arg-type">Address</span>
+                            <code class="arg-value" title={stellarAddress}>
+                                {shortStrkey(stellarAddress)}
+                            </code>
+                            <span class="arg-note">caller</span>
+                        </li>
+                        <li>
+                            <span class="arg-name">spender</span>
+                            <span class="arg-type">Address</span>
+                            <code class="arg-value" title={STELLAR.contracts.tokenMessengerMinter}>
+                                {shortContract(STELLAR.contracts.tokenMessengerMinter)}
+                            </code>
+                            <span class="arg-note">tmm</span>
+                        </li>
+                        <li>
+                            <span class="arg-name">amount</span>
+                            <span class="arg-type">i128</span>
+                            {#if parsedAmount.ok}
+                                <code class="arg-value">{parsedAmount.raw.toString()}</code>
+                                <span class="arg-note">{formatUsdc(parsedAmount.raw)} USDC</span>
+                            {:else}
+                                <span class="arg-placeholder">Enter an amount above</span>
+                            {/if}
+                        </li>
+                        <li>
+                            <span class="arg-name">expiration_ledger</span>
+                            <span class="arg-type">u32</span>
+                            <span class="arg-placeholder">
+                                computed in-contract: (sequence + 50).next_multiple_of(50)
+                            </span>
+                        </li>
+                    </ul>
+                </li>
+
+                <li class="auth-call">
+                    <div class="auth-head">
+                        <code class="auth-target" title={STELLAR.contracts.tokenMessengerMinter}>
+                            {shortContract(STELLAR.contracts.tokenMessengerMinter)}
+                        </code>
+                        <span class="auth-dot">·</span>
+                        <code class="auth-fn">deposit_for_burn</code>
+                    </div>
+                    <ul class="auth-args">
+                        <li>
+                            <span class="arg-name">caller</span>
+                            <span class="arg-type">Address</span>
+                            <code class="arg-value" title={stellarAddress}>
+                                {shortStrkey(stellarAddress)}
+                            </code>
+                        </li>
+                        <li>
+                            <span class="arg-name">amount</span>
+                            <span class="arg-type">i128</span>
+                            {#if parsedAmount.ok}
+                                <code class="arg-value">{parsedAmount.raw.toString()}</code>
+                                <span class="arg-note">{formatUsdc(parsedAmount.raw)} USDC</span>
+                            {:else}
+                                <span class="arg-placeholder">Enter an amount above</span>
+                            {/if}
+                        </li>
+                        <li>
+                            <span class="arg-name">destination_domain</span>
+                            <span class="arg-type">u32</span>
+                            <code class="arg-value">{chain.domain}</code>
+                            <span class="arg-note">{chain.label}</span>
+                        </li>
+                        <li class="wide">
+                            <span class="arg-name">mint_recipient</span>
+                            <span class="arg-type">BytesN&lt;32&gt;</span>
+                            <code class="arg-hex">{mintRecipientHex}</code>
+                            <span class="arg-note">→ {evmRecipient}</span>
+                        </li>
+                        <li>
+                            <span class="arg-name">burn_token</span>
+                            <span class="arg-type">Address</span>
+                            <code class="arg-value" title={STELLAR.contracts.usdc}>
+                                {shortContract(STELLAR.contracts.usdc)}
+                            </code>
+                            <span class="arg-note">usdc</span>
+                        </li>
+                        <li class="wide">
+                            <span class="arg-name">destination_caller</span>
+                            <span class="arg-type">BytesN&lt;32&gt;</span>
+                            <code class="arg-hex">{ZERO_BYTES_32_HEX}</code>
+                            <span class="arg-note">open</span>
+                        </li>
+                        <li>
+                            <span class="arg-name">max_fee</span>
+                            <span class="arg-type">i128</span>
+                            <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
+                        </li>
+                        <li>
+                            <span class="arg-name">min_finality_threshold</span>
+                            <span class="arg-type">u32</span>
+                            <code class="arg-value">{FINALIZED_THRESHOLD}</code>
+                            <span class="arg-note">finalized</span>
+                        </li>
+                    </ul>
+                </li>
+            </ol>
+        </details>
+    {/if}
+</section>
+
+<style>
+    .burn-preview {
+        background: var(--bg-elev-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0.85rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+
+    .head {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .title {
+        margin: 0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .sub {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+
+    .meta {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        padding: 0.5rem 0.6rem;
+        background: var(--bg);
+        border-radius: var(--radius);
+    }
+
+    .meta-row {
+        display: grid;
+        grid-template-columns: max-content max-content 1fr;
+        align-items: baseline;
+        gap: 0.5rem;
+    }
+
+    .meta-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .meta-value {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        color: var(--text);
+    }
+
+    .meta-aside {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+
+    .flow-note {
+        margin: 0;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+
+    .flow-note code {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--text);
+    }
+
+    .section-title {
+        margin: 0.2rem 0 0;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .row {
+        display: grid;
+        grid-template-columns: max-content max-content 1fr;
+        align-items: baseline;
+        gap: 0.2rem 0.6rem;
+        padding: 0.4rem 0.5rem;
+        background: var(--bg);
+        border-radius: var(--radius);
+        border-left: 2px solid var(--accent);
+    }
+
+    .row.wide,
+    .auth-args li.wide {
+        grid-template-columns: max-content max-content;
+    }
+
+    .arg-name {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        color: var(--text);
+        font-weight: 500;
+    }
+
+    .arg-type {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        color: var(--accent);
+        font-weight: 600;
+    }
+
+    .arg-value {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        color: var(--text);
+        word-break: break-all;
+        justify-self: end;
+    }
+
+    .arg-note {
+        grid-column: 1 / -1;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+
+    .arg-placeholder {
+        grid-column: 3 / -1;
+        font-size: 0.75rem;
+        color: var(--text-dim);
+        font-style: italic;
+        justify-self: end;
+    }
+
+    .arg-hex {
+        grid-column: 1 / -1;
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--text);
+        word-break: break-all;
+        overflow-x: auto;
+    }
+
+    .auth-tree {
+        margin-top: 0.25rem;
+        background: var(--bg);
+        border-radius: var(--radius);
+        padding: 0.5rem 0.6rem;
+        border-left: 2px solid var(--accent);
+    }
+
+    .auth-tree summary {
+        cursor: pointer;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text);
+        list-style: none;
+    }
+
+    .auth-tree summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .auth-tree summary::before {
+        content: '▸';
+        display: inline-block;
+        width: 1em;
+        color: var(--text-muted);
+        transition: transform 120ms;
+    }
+
+    .auth-tree[open] summary::before {
+        transform: rotate(90deg);
+    }
+
+    .auth-list {
+        list-style: none;
+        margin: 0.5rem 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .auth-call {
+        border-left: 2px solid var(--border-strong);
+        padding: 0.3rem 0 0.3rem 0.6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .auth-head {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+    }
+
+    .auth-target {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        color: var(--text-muted);
+    }
+
+    .auth-dot {
+        color: var(--text-dim);
+    }
+
+    .auth-fn {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        color: var(--text);
+        font-weight: 600;
+    }
+
+    .auth-args {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .auth-args li {
+        display: grid;
+        grid-template-columns: max-content max-content 1fr;
+        align-items: baseline;
+        gap: 0.2rem 0.5rem;
+        padding: 0.25rem 0.4rem;
+        background: var(--bg-elev-2);
+        border-radius: var(--radius);
+    }
+</style>

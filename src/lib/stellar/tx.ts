@@ -1,5 +1,6 @@
 import { TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 import { STELLAR } from '$lib/config';
+import { sleep } from '$lib/utils';
 import { stellarRpc } from './client';
 import { signXdr } from './freighter';
 
@@ -32,8 +33,4 @@ export async function simulateSignAndSubmit(
         await sleep(1000);
     }
     throw new Error(`Transaction did not finalize within 60s: ${send.hash}`);
-}
-
-function sleep(ms: number) {
-    return new Promise((r) => setTimeout(r, ms));
 }

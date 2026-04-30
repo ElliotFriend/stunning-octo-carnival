@@ -25,3 +25,6 @@ vite.config.ts.timestamp-*
 # contract stuff
 target
 **/test_snapshots
+
+# Claude
+/.claude

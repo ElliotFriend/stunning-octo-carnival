@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onDestroy } from 'svelte';
+    import { EVM_CHAINS } from '$lib/config';
     import type { TransferState } from '$lib/stores/transfer.svelte';
 
     let { transfer }: { transfer: TransferState } = $props();
@@ -9,11 +10,12 @@
     let tick = setInterval(() => (now = Date.now()), 1000);
     onDestroy(() => clearInterval(tick));
 
-    const LONG_WAIT_KEY = 'attest';
-    const LONG_WAIT_DIRECTION = 'evm-to-stellar';
-    const LONG_WAIT_CHAIN = 'base';
-    // Mean Base Sepolia → Sepolia finality, used for the estimate countdown.
-    const LONG_WAIT_TARGET_MS = 15 * 60_000;
+    let longWaitEtaMs = $derived(
+        transfer.direction === 'evm-to-stellar'
+            ? EVM_CHAINS[transfer.evmChainId].attestationEtaMs
+            : undefined,
+    );
+    let longWaitChainLabel = $derived(EVM_CHAINS[transfer.evmChainId].label);
 
     function fmtElapsed(s: { startedAt?: number; endedAt?: number }): string | null {
         if (!s.startedAt) return null;
@@ -25,9 +27,9 @@
         return `${m}m ${r.toString().padStart(2, '0')}s`;
     }
 
-    function fmtRemaining(startedAt: number): string {
+    function fmtRemaining(startedAt: number, etaMs: number): string {
         const elapsed = now - startedAt;
-        const remaining = LONG_WAIT_TARGET_MS - elapsed;
+        const remaining = etaMs - elapsed;
         if (remaining <= 0) return 'any moment now';
         const m = Math.ceil(remaining / 60_000);
         return `~${m} min remaining`;
@@ -38,12 +40,57 @@
     }
 
     function isLongWait(stepKey: string, status: string) {
-        return (
-            stepKey === LONG_WAIT_KEY &&
-            status === 'active' &&
-            transfer.direction === LONG_WAIT_DIRECTION &&
-            transfer.evmChainId === LONG_WAIT_CHAIN
-        );
+        return stepKey === 'attest' && status === 'active' && longWaitEtaMs !== undefined;
+    }
+
+    // Top-level fields from IrisMessage we always want to show, even if they
+    // also appear in decodedMessage.
+    const TOP_LEVEL_KEYS = [
+        'cctpVersion',
+        'sourceDomain',
+        'destinationDomain',
+        'eventNonce',
+    ] as const;
+
+    function isPlainObject(v: unknown): v is Record<string, unknown> {
+        return typeof v === 'object' && v !== null && !Array.isArray(v);
+    }
+
+    function fmtValue(v: unknown): string {
+        if (v === null || v === undefined) return String(v);
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+            return String(v);
+        }
+        if (typeof v === 'bigint') return v.toString();
+        try {
+            return JSON.stringify(v);
+        } catch {
+            return String(v);
+        }
+    }
+
+    type Row = { key: string; value: unknown };
+
+    // Merge top-level IrisMessage fields with the decoded message fields,
+    // de-duplicating by key (top-level wins). Plain array for the seen-set
+    // since the lint rule discourages `Set` here and the list is tiny.
+    function attestationRows(attestation: NonNullable<typeof transfer.attestation>): Row[] {
+        const rows: Row[] = [];
+        const seen: string[] = [];
+        for (const k of TOP_LEVEL_KEYS) {
+            const v = attestation[k];
+            if (v === undefined) continue;
+            rows.push({ key: k, value: v });
+            seen.push(k);
+        }
+        const decoded = attestation.decodedMessage;
+        if (decoded) {
+            for (const [k, v] of Object.entries(decoded)) {
+                if (seen.includes(k)) continue;
+                rows.push({ key: k, value: v });
+            }
+        }
+        return rows;
     }
 </script>
 
@@ -80,15 +127,55 @@
                             <span class="ext">↗</span>
                         </a>
                     {/if}
-                    {#if isLongWait(step.key, step.status) && step.startedAt}
+                    {#if isLongWait(step.key, step.status) && step.startedAt && longWaitEtaMs !== undefined}
                         <aside class="long-wait">
-                            <strong>This step usually takes about 15 minutes.</strong>
+                            <strong>
+                                This step usually takes about {Math.round(longWaitEtaMs / 60_000)} minutes.
+                            </strong>
                             <span class="long-wait-sub">
-                                Circle's attesters wait for Base's batch to settle on Sepolia and
-                                reach Ethereum finality. Safe to leave the tab open — don't refresh.
+                                Circle's attesters wait for {longWaitChainLabel}'s batch to settle
+                                and reach finality on its parent chain. Safe to leave the tab open —
+                                don't refresh.
                             </span>
-                            <span class="long-wait-eta">{fmtRemaining(step.startedAt)}</span>
+                            <span class="long-wait-eta"
+                                >{fmtRemaining(step.startedAt, longWaitEtaMs)}</span
+                            >
                         </aside>
+                    {/if}
+                    {#if step.key === 'attest' && transfer.attestation}
+                        <details class="cctp-msg">
+                            <summary>CCTP message</summary>
+                            <div class="cctp-msg-body">
+                                <p class="cctp-msg-blurb">
+                                    This is the CCTP message Circle's attesters signed. The
+                                    destination contract verifies the signature, then mints the new
+                                    USDC.
+                                </p>
+                                <dl class="cctp-msg-fields">
+                                    {#each attestationRows(transfer.attestation) as row (row.key)}
+                                        <dt>{row.key}</dt>
+                                        <dd>
+                                            {#if isPlainObject(row.value)}
+                                                <details class="nested">
+                                                    <summary>object</summary>
+                                                    <pre>{JSON.stringify(row.value, null, 2)}</pre>
+                                                </details>
+                                            {:else}
+                                                <code>{fmtValue(row.value)}</code>
+                                            {/if}
+                                        </dd>
+                                    {/each}
+                                </dl>
+                                <details class="raw">
+                                    <summary>raw message (hex)</summary>
+                                    <code class="hex">{transfer.attestation.message}</code>
+                                </details>
+                                <details class="raw">
+                                    <summary>raw attestation (hex)</summary>
+                                    <code class="hex">{transfer.attestation.attestation}</code>
+                                </details>
+                            </div>
+                        </details>
                     {/if}
                 </div>
             </li>
@@ -275,5 +362,99 @@
         font-size: 0.85rem;
         color: var(--warning);
         font-variant-numeric: tabular-nums;
+    }
+
+    .cctp-msg {
+        margin-top: 0.5rem;
+        background: var(--bg-elev-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        font-size: 0.85rem;
+    }
+
+    .cctp-msg > summary {
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        color: var(--text-muted);
+        list-style: revert; /* keep the native disclosure triangle */
+    }
+
+    .cctp-msg[open] > summary {
+        color: var(--text);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .cctp-msg-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 0.75rem;
+    }
+
+    .cctp-msg-blurb {
+        margin: 0;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+
+    .cctp-msg-fields {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.25rem 0.75rem;
+        margin: 0;
+    }
+
+    .cctp-msg-fields dt {
+        color: var(--text-dim);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+    }
+
+    .cctp-msg-fields dd {
+        margin: 0;
+        min-width: 0;
+    }
+
+    .cctp-msg-fields code {
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        color: var(--text);
+        word-break: break-all;
+    }
+
+    .nested,
+    .raw {
+        font-size: 0.8rem;
+    }
+
+    .nested > summary,
+    .raw > summary {
+        cursor: pointer;
+        color: var(--text-muted);
+        list-style: revert;
+    }
+
+    .nested pre {
+        margin: 0.4rem 0 0;
+        padding: 0.5rem;
+        background: var(--bg);
+        border-radius: var(--radius);
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--text);
+        overflow-x: auto;
+    }
+
+    .hex {
+        display: block;
+        margin-top: 0.4rem;
+        padding: 0.5rem;
+        background: var(--bg);
+        border-radius: var(--radius);
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--text);
+        word-break: break-all;
+        overflow-x: auto;
     }
 </style>

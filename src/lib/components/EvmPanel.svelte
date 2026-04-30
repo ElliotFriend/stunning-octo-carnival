@@ -1,17 +1,24 @@
 <script lang="ts">
-    import { connectEvm, disconnectEvm, ensureChain, type EvmWallet } from '$lib/evm/wallet';
+    import { onMount } from 'svelte';
+    import {
+        connectEvm,
+        detectExistingEvm,
+        disconnectEvm,
+        discoverEvmProviders,
+        ensureChain,
+        type EvmProviderInfo,
+        type EvmWallet,
+    } from '$lib/evm/wallet';
     import { formatEvmUsdc, getEvmUsdcBalance } from '$lib/evm/usdc';
     import { EVM_CHAINS, type EvmChainId } from '$lib/config';
 
     let {
         wallet = $bindable<EvmWallet | null>(null),
-        chainId,
-        onChainChange,
+        chainId = $bindable<EvmChainId>('arc'),
         disabled = false,
     }: {
         wallet?: EvmWallet | null;
-        chainId: EvmChainId;
-        onChainChange: (id: EvmChainId) => void;
+        chainId?: EvmChainId;
         disabled?: boolean;
     } = $props();
 
@@ -19,9 +26,18 @@
     let balanceError = $state<string | null>(null);
     let connecting = $state(false);
     let connectError = $state<string | null>(null);
+    let pickerProviders = $state<EvmProviderInfo[] | null>(null);
 
     let selectedCfg = $derived(EVM_CHAINS[chainId]);
     let onCorrectChain = $derived(!!wallet && wallet.chainId === selectedCfg.chain.id);
+
+    onMount(async () => {
+        const existing = await detectExistingEvm();
+        if (existing) {
+            wallet = existing;
+            await refreshBalance();
+        }
+    });
 
     async function refreshBalance() {
         if (!wallet) {
@@ -41,17 +57,37 @@
         return refreshBalance();
     }
 
-    async function connect() {
+    async function startConnect() {
+        connectError = null;
+        connecting = true;
+        try {
+            const providers = await discoverEvmProviders();
+            if (providers.length === 0) {
+                await connectWith(undefined);
+            } else if (providers.length === 1) {
+                await connectWith(providers[0]);
+            } else {
+                pickerProviders = providers;
+            }
+        } catch (err) {
+            connectError = err instanceof Error ? err.message : String(err);
+        } finally {
+            connecting = false;
+        }
+    }
+
+    async function connectWith(info: EvmProviderInfo | undefined) {
         connecting = true;
         connectError = null;
         try {
-            let w = await connectEvm();
+            let w = await connectEvm(info);
             w = await ensureChain(w, chainId);
             wallet = w;
             await refreshBalance();
         } catch (err) {
             connectError = err instanceof Error ? err.message : String(err);
         } finally {
+            pickerProviders = null;
             connecting = false;
         }
     }
@@ -69,7 +105,7 @@
 
     async function pickChain(id: EvmChainId) {
         if (id === chainId) return;
-        onChainChange(id);
+        chainId = id;
         if (wallet) {
             await switchChain();
         } else {
@@ -79,7 +115,7 @@
     }
 
     async function disconnect() {
-        await disconnectEvm();
+        await disconnectEvm(wallet?.provider);
         wallet = null;
         balance = null;
     }
@@ -111,12 +147,7 @@
         {/each}
     </div>
 
-    {#if !wallet}
-        <button class="connect" onclick={connect} disabled={connecting}>
-            {connecting ? 'Connecting…' : 'Connect EVM Wallet'}
-        </button>
-        {#if connectError}<p class="error">{connectError}</p>{/if}
-    {:else}
+    {#if wallet}
         <div class="addr-row">
             <code class="addr" title={wallet.address}>{shortAddr(wallet.address)}</code>
             <div class="actions">
@@ -139,6 +170,36 @@
         {/if}
         {#if connectError}<p class="error">{connectError}</p>{/if}
         {#if balanceError}<p class="error">{balanceError}</p>{/if}
+    {:else if pickerProviders}
+        <div class="picker">
+            <span class="picker-label">Choose a wallet</span>
+            <div class="picker-list">
+                {#each pickerProviders as info (info.uuid)}
+                    <button
+                        type="button"
+                        class="connect picker-item"
+                        disabled={connecting}
+                        onclick={() => connectWith(info)}
+                    >
+                        <img class="picker-icon" src={info.icon} alt="" />
+                        <span class="picker-name">{info.name}</span>
+                    </button>
+                {/each}
+            </div>
+            <button
+                type="button"
+                class="link picker-cancel"
+                onclick={() => (pickerProviders = null)}
+            >
+                cancel
+            </button>
+            {#if connectError}<p class="error">{connectError}</p>{/if}
+        </div>
+    {:else}
+        <button class="connect" onclick={startConnect} disabled={connecting}>
+            {connecting ? 'Connecting…' : 'Connect EVM Wallet'}
+        </button>
+        {#if connectError}<p class="error">{connectError}</p>{/if}
     {/if}
 </section>
 
@@ -286,6 +347,51 @@
         font-size: 0.85rem;
         margin: 0;
         word-break: break-word;
+    }
+
+    .picker {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .picker-label {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .picker-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .picker-item {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .picker-icon {
+        width: 20px;
+        height: 20px;
+        flex: none;
+        object-fit: contain;
+        border-radius: 4px;
+        background: var(--bg-elev-2);
+    }
+
+    .picker-name {
+        font-size: 0.9rem;
+        color: var(--text);
+    }
+
+    .picker-cancel {
+        align-self: flex-start;
     }
 
     .wrong-chain {
