@@ -25,9 +25,7 @@ export async function getUsdcBalance(stellarAddress: string): Promise<bigint> {
 }
 
 async function buildBalanceProbe(stellarAddress: string) {
-	const acct = await stellarRpc
-		.getAccount(stellarAddress)
-		.catch(() => new Account(stellarAddress, '0'));
+	const acct = new Account(stellarAddress, '0');
 	return new TransactionBuilder(acct, {
 		fee: BASE_FEE,
 		networkPassphrase: STELLAR.networkPassphrase

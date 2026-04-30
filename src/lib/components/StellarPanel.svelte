@@ -7,7 +7,14 @@
 	} from '$lib/stellar/freighter';
 	import { formatUsdc, getUsdcBalance } from '$lib/stellar/usdc';
 
-	let { freighter = $bindable<FreighterState>({ installed: false, address: null, networkPassphrase: null }) } = $props();
+	let {
+		freighter = $bindable<FreighterState>({
+			installed: false,
+			address: null,
+			networkPassphrase: null
+		}),
+		refreshSignal = 0
+	}: { freighter?: FreighterState; refreshSignal?: number } = $props();
 
 	let balance = $state<bigint | null>(null);
 	let balanceError = $state<string | null>(null);
@@ -30,6 +37,7 @@
 	}
 
 	$effect(() => {
+		void refreshSignal;
 		if (freighter.address) refreshBalance();
 		else balance = null;
 	});

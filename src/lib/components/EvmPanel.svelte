@@ -11,11 +11,13 @@
 	let {
 		wallet = $bindable<EvmWallet | null>(null),
 		chainId = $bindable<EvmChainId>('arc'),
-		disabled = false
+		disabled = false,
+		refreshSignal = 0
 	}: {
 		wallet?: EvmWallet | null;
 		chainId?: EvmChainId;
 		disabled?: boolean;
+		refreshSignal?: number;
 	} = $props();
 
 	let balance = $state<bigint | null>(null);
@@ -37,7 +39,8 @@
 	}
 
 	$effect(() => {
-		// Re-read balance when wallet OR selected chain changes.
+		// Re-read balance when wallet, selected chain, or refresh signal changes.
+		void refreshSignal;
 		if (wallet) {
 			void chainId;
 			refreshBalance();

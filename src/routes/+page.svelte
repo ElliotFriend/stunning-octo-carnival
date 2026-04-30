@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import StellarPanel from '$lib/components/StellarPanel.svelte';
 	import EvmPanel from '$lib/components/EvmPanel.svelte';
 	import DirectionSwitcher from '$lib/components/DirectionSwitcher.svelte';
@@ -18,12 +19,24 @@
 	let evmChainId = $state<EvmChainId>(DEFAULT_EVM_CHAIN);
 	let direction = $state<Direction>('stellar-to-evm');
 	let amount = $state('');
+	// Bumped when a transfer finishes — panels watch this to refetch balances.
+	let refreshSignal = $state(0);
 
 	const transfer = createTransferStore('stellar-to-evm', DEFAULT_EVM_CHAIN);
 
 	// One effect, no store-state reads inside — avoids effect_update_depth_exceeded.
 	$effect(() => {
 		transfer.setShape({ direction, evmChainId });
+	});
+
+	// `refreshSignal++` reads + writes refreshSignal, which would make it a
+	// dependency of this effect and re-fire the effect on every write — an
+	// infinite loop where each iteration re-triggers the panels' balance
+	// refresh effects. `untrack` excludes the read from dependency tracking.
+	$effect(() => {
+		if (transfer.state.phase === 'done') {
+			untrack(() => refreshSignal++);
+		}
 	});
 
 	let bothConnected = $derived(!!stellar.address && !!evm);
@@ -62,8 +75,8 @@
 	</header>
 
 	<div class="wallets">
-		<StellarPanel bind:freighter={stellar} />
-		<EvmPanel bind:wallet={evm} bind:chainId={evmChainId} disabled={busy} />
+		<StellarPanel bind:freighter={stellar} {refreshSignal} />
+		<EvmPanel bind:wallet={evm} bind:chainId={evmChainId} disabled={busy} {refreshSignal} />
 	</div>
 
 	<section class="action">
@@ -96,7 +109,7 @@
 		·
 		<a href="https://faucet.circle.com" target="_blank" rel="noreferrer">USDC faucet</a>
 		·
-		<a href="https://faucet.stellar.org" target="_blank" rel="noreferrer">XLM faucet</a>
+		<a href="https://lab.stellar.org/account/fund" target="_blank" rel="noreferrer">XLM faucet</a>
 	</footer>
 </main>
 
