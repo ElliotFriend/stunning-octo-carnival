@@ -1,78 +1,81 @@
 :root {
-	--bg: #0b0d12;
-	--bg-elev: #141821;
-	--bg-elev-2: #1c2230;
-	--border: #232a39;
-	--border-strong: #303a4f;
+    --bg: #0b0d12;
+    --bg-elev: #141821;
+    --bg-elev-2: #1c2230;
+    --border: #232a39;
+    --border-strong: #303a4f;
 
-	--text: #e8ecf4;
-	--text-muted: #8b94a7;
-	--text-dim: #5b6373;
+    --text: #e8ecf4;
+    --text-muted: #8b94a7;
+    --text-dim: #5b6373;
 
-	--accent: #7c8cff;
-	--accent-hover: #93a0ff;
-	--accent-dim: #2a3370;
+    --accent: #7c8cff;
+    --accent-hover: #93a0ff;
+    --accent-dim: #2a3370;
 
-	--stellar: #fdda24;
-	--base: #0052ff;
-	--arc: #5cdcc6;
+    --stellar: #fdda24;
+    --base: #0052ff;
+    --arc: #5cdcc6;
 
-	--success: #4ade80;
-	--warning: #fbbf24;
-	--error: #ef4444;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #ef4444;
 
-	--radius: 8px;
-	--radius-lg: 12px;
+    --radius: 8px;
+    --radius-lg: 12px;
 
-	--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-	--sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
-	color-scheme: dark;
+    color-scheme: dark;
 }
 
-*, *::before, *::after {
-	box-sizing: border-box;
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
 }
 
-html, body {
-	margin: 0;
-	padding: 0;
-	min-height: 100vh;
-	background: var(--bg);
-	color: var(--text);
-	font-family: var(--sans);
-	font-size: 15px;
-	line-height: 1.5;
-	-webkit-font-smoothing: antialiased;
+html,
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
 a {
-	color: var(--accent);
-	text-decoration: none;
+    color: var(--accent);
+    text-decoration: none;
 }
 
 a:hover {
-	color: var(--accent-hover);
-	text-decoration: underline;
+    color: var(--accent-hover);
+    text-decoration: underline;
 }
 
 button {
-	font-family: inherit;
-	font-size: inherit;
-	cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
 }
 
 button:disabled {
-	cursor: not-allowed;
-	opacity: 0.5;
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 input {
-	font-family: inherit;
-	font-size: inherit;
+    font-family: inherit;
+    font-size: inherit;
 }
 
 code {
-	font-family: var(--mono);
-	font-size: 0.9em;
+    font-family: var(--mono);
+    font-size: 0.9em;
 }

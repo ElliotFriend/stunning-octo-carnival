@@ -24,18 +24,18 @@ const RPC_RETRY_DELAY_MS = 1_500;
 const RPC_RETRY_COUNT = 3;
 
 export function getPublicClient(chainId: EvmChainId): PublicClient {
-	const cached = cache.get(chainId);
-	if (cached) return cached;
-	const cfg = EVM_CHAINS[chainId];
-	const client = createPublicClient({
-		chain: cfg.chain,
-		transport: http(undefined, {
-			retryCount: RPC_RETRY_COUNT,
-			retryDelay: RPC_RETRY_DELAY_MS
-		}),
-		pollingInterval: POLLING_INTERVAL_MS,
-		cacheTime: 0
-	}) as PublicClient;
-	cache.set(chainId, client);
-	return client;
+    const cached = cache.get(chainId);
+    if (cached) return cached;
+    const cfg = EVM_CHAINS[chainId];
+    const client = createPublicClient({
+        chain: cfg.chain,
+        transport: http(undefined, {
+            retryCount: RPC_RETRY_COUNT,
+            retryDelay: RPC_RETRY_DELAY_MS,
+        }),
+        pollingInterval: POLLING_INTERVAL_MS,
+        cacheTime: 0,
+    }) as PublicClient;
+    cache.set(chainId, client);
+    return client;
 }

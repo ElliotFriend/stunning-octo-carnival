@@ -36,13 +36,13 @@ You can flip to Base Sepolia at any time via the picker in the EVM panel.
 
 ## Faucets
 
-| You need | Where |
-| --- | --- |
-| Testnet XLM | <https://lab.stellar.org/account/fund> |
+| You need                | Where                                                |
+| ----------------------- | ---------------------------------------------------- |
+| Testnet XLM             | <https://lab.stellar.org/account/fund>               |
 | Testnet USDC on Stellar | <https://faucet.circle.com> (pick "Stellar Testnet") |
-| Testnet USDC on Arc | <https://faucet.circle.com> (pick "Arc Testnet") |
-| Testnet USDC on Base | <https://faucet.circle.com> (pick "Base Sepolia") |
-| Base Sepolia ETH | <https://www.alchemy.com/faucets/base-sepolia> |
+| Testnet USDC on Arc     | <https://faucet.circle.com> (pick "Arc Testnet")     |
+| Testnet USDC on Base    | <https://faucet.circle.com> (pick "Base Sepolia")    |
+| Base Sepolia ETH        | <https://www.alchemy.com/faucets/base-sepolia>       |
 
 You'll also need a USDC trustline on your Stellar testnet account before
 USDC can land. Freighter or LOBSTR will prompt you to add it on first
@@ -50,11 +50,11 @@ deposit.
 
 ## Network details
 
-| Chain | Chain ID | RPC | Explorer | CCTP domain |
-| --- | --- | --- | --- | --- |
-| Arc Testnet | 5042002 | <https://rpc.testnet.arc.network> | <https://testnet.arcscan.app> | 26 |
-| Base Sepolia | 84532 | (your wallet's default) | <https://sepolia.basescan.org> | 6 |
-| Stellar Testnet | — | <https://soroban-testnet.stellar.org> | <https://stellar.expert/explorer/testnet> | 27 |
+| Chain           | Chain ID | RPC                                   | Explorer                                  | CCTP domain |
+| --------------- | -------- | ------------------------------------- | ----------------------------------------- | ----------- |
+| Arc Testnet     | 5042002  | <https://rpc.testnet.arc.network>     | <https://testnet.arcscan.app>             | 26          |
+| Base Sepolia    | 84532    | (your wallet's default)               | <https://sepolia.basescan.org>            | 6           |
+| Stellar Testnet | —        | <https://soroban-testnet.stellar.org> | <https://stellar.expert/explorer/testnet> | 27          |
 
 ## How it works
 
@@ -62,11 +62,11 @@ CCTP burns USDC on the source chain and mints fresh USDC on the destination
 — no liquidity pools, no wrapped tokens. Three contracts are involved on
 Stellar:
 
-| Contract | Purpose |
-| --- | --- |
-| `TokenMessengerMinter` (`CDNG…RTHP`) | Burns USDC outbound, mints inbound |
-| `MessageTransmitter` (`CBJ6…VVJY`) | Generic message bus + attestation verifier |
-| `CctpForwarder` (`CA66…4VSZ`) | Routes inbound USDC to a regular Stellar account |
+| Contract                             | Purpose                                          |
+| ------------------------------------ | ------------------------------------------------ |
+| `TokenMessengerMinter` (`CDNG…RTHP`) | Burns USDC outbound, mints inbound               |
+| `MessageTransmitter` (`CBJ6…VVJY`)   | Generic message bus + attestation verifier       |
+| `CctpForwarder` (`CA66…4VSZ`)        | Routes inbound USDC to a regular Stellar account |
 
 On every EVM chain, CCTP V2 deploys to the same addresses:
 
