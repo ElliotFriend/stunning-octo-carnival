@@ -93,9 +93,11 @@ export function createTransferStore(
 ) {
     let state = $state<TransferState>(initialState(initialDirection, initialEvmChain, initialFlow));
 
-    // Single setter so callers don't have to read existing store state to
-    // update one field — that would create a read+write cycle inside any
-    // $effect that calls these.
+    // Atomic reset: takes the full shape so callers don't have to read
+    // existing store state to update one field. The whole `state` object is
+    // replaced with a fresh `initialState`, which guarantees `phase`, `steps`,
+    // `error`, and `amount` are consistent with the new shape — no per-field
+    // patching required by the caller.
     function setShape(shape: {
         direction: Direction;
         evmChainId: EvmChainId;

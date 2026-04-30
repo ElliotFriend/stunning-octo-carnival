@@ -5,14 +5,14 @@
 
     let {
         wallet = $bindable<EvmWallet | null>(null),
-        chainId = $bindable<EvmChainId>('arc'),
+        chainId,
+        onChainChange,
         disabled = false,
-        refreshSignal = 0,
     }: {
         wallet?: EvmWallet | null;
-        chainId?: EvmChainId;
+        chainId: EvmChainId;
+        onChainChange: (id: EvmChainId) => void;
         disabled?: boolean;
-        refreshSignal?: number;
     } = $props();
 
     let balance = $state<bigint | null>(null);
@@ -24,7 +24,10 @@
     let onCorrectChain = $derived(!!wallet && wallet.chainId === selectedCfg.chain.id);
 
     async function refreshBalance() {
-        if (!wallet) return;
+        if (!wallet) {
+            balance = null;
+            return;
+        }
         balanceError = null;
         try {
             balance = await getEvmUsdcBalance(chainId, wallet.address);
@@ -33,16 +36,10 @@
         }
     }
 
-    $effect(() => {
-        // Re-read balance when wallet, selected chain, or refresh signal changes.
-        void refreshSignal;
-        if (wallet) {
-            void chainId;
-            refreshBalance();
-        } else {
-            balance = null;
-        }
-    });
+    // Exposed via `bind:this` so the parent can refetch balance after a transfer.
+    export function refresh() {
+        return refreshBalance();
+    }
 
     async function connect() {
         connecting = true;
@@ -51,6 +48,7 @@
             let w = await connectEvm();
             w = await ensureChain(w, chainId);
             wallet = w;
+            await refreshBalance();
         } catch (err) {
             connectError = err instanceof Error ? err.message : String(err);
         } finally {
@@ -63,6 +61,7 @@
         connectError = null;
         try {
             wallet = await ensureChain(wallet, chainId);
+            await refreshBalance();
         } catch (err) {
             connectError = err instanceof Error ? err.message : String(err);
         }
@@ -70,13 +69,19 @@
 
     async function pickChain(id: EvmChainId) {
         if (id === chainId) return;
-        chainId = id;
-        if (wallet) await switchChain();
+        onChainChange(id);
+        if (wallet) {
+            await switchChain();
+        } else {
+            // No wallet to switch — just clear the stale balance for the previous chain.
+            balance = null;
+        }
     }
 
     async function disconnect() {
         await disconnectEvm();
         wallet = null;
+        balance = null;
     }
 
     function shortAddr(a: string) {

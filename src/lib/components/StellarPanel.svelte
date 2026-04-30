@@ -10,13 +10,13 @@
             address: null,
             networkPassphrase: null,
         }),
-        outboundFlow = $bindable<OutboundFlow>('two-tx'),
-        refreshSignal = 0,
+        outboundFlow,
+        onFlowChange,
         disabled = false,
     }: {
         freighter?: FreighterState;
-        outboundFlow?: OutboundFlow;
-        refreshSignal?: number;
+        outboundFlow: OutboundFlow;
+        onFlowChange: (flow: OutboundFlow) => void;
         disabled?: boolean;
     } = $props();
 
@@ -27,10 +27,14 @@
 
     onMount(async () => {
         freighter = await detectFreighter();
+        if (freighter.address) await refreshBalance();
     });
 
     async function refreshBalance() {
-        if (!freighter.address) return;
+        if (!freighter.address) {
+            balance = null;
+            return;
+        }
         balanceError = null;
         try {
             balance = await getUsdcBalance(freighter.address);
@@ -40,17 +44,17 @@
         }
     }
 
-    $effect(() => {
-        void refreshSignal;
-        if (freighter.address) refreshBalance();
-        else balance = null;
-    });
+    // Exposed via `bind:this` so the parent can refetch balance after a transfer.
+    export function refresh() {
+        return refreshBalance();
+    }
 
     async function connect() {
         connecting = true;
         connectError = null;
         try {
             freighter = await connectFreighter();
+            await refreshBalance();
         } catch (err) {
             connectError = err instanceof Error ? err.message : String(err);
         } finally {
@@ -98,7 +102,7 @@
                 class="chip"
                 class:active={outboundFlow === 'two-tx'}
                 {disabled}
-                onclick={() => (outboundFlow = 'two-tx')}
+                onclick={() => onFlowChange('two-tx')}
                 role="tab"
                 aria-selected={outboundFlow === 'two-tx'}
                 title="Sign approve, then sign deposit_for_burn separately"
@@ -110,7 +114,7 @@
                 class="chip"
                 class:active={outboundFlow === 'wrapper'}
                 {disabled}
-                onclick={() => (outboundFlow = 'wrapper')}
+                onclick={() => onFlowChange('wrapper')}
                 role="tab"
                 aria-selected={outboundFlow === 'wrapper'}
                 title="One Soroban tx via wrapper contract — single Freighter prompt"

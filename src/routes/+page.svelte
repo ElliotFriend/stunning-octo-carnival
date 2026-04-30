@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { untrack } from 'svelte';
     import StellarPanel from '$lib/components/StellarPanel.svelte';
     import EvmPanel from '$lib/components/EvmPanel.svelte';
     import DirectionSwitcher from '$lib/components/DirectionSwitcher.svelte';
@@ -27,8 +26,11 @@
     let direction = $state<Direction>('stellar-to-evm');
     let outboundFlow = $state<OutboundFlow>(DEFAULT_OUTBOUND_FLOW);
     let amount = $state('');
-    // Bumped when a transfer finishes — panels watch this to refetch balances.
-    let refreshSignal = $state(0);
+
+    // Component instance handles, populated by `bind:this`. Used to imperatively
+    // refresh each panel's balance after a successful transfer.
+    let stellarPanel = $state<{ refresh: () => Promise<void> } | undefined>();
+    let evmPanel = $state<{ refresh: () => Promise<void> } | undefined>();
 
     const transfer = createTransferStore(
         'stellar-to-evm',
@@ -36,20 +38,20 @@
         DEFAULT_OUTBOUND_FLOW,
     );
 
-    // One effect, no store-state reads inside — avoids effect_update_depth_exceeded.
-    $effect(() => {
-        transfer.setShape({ direction, evmChainId, outboundFlow });
-    });
+    function onDirectionChange(d: Direction) {
+        direction = d;
+        transfer.setShape({ direction: d, evmChainId, outboundFlow });
+    }
 
-    // `refreshSignal++` reads + writes refreshSignal, which would make it a
-    // dependency of this effect and re-fire the effect on every write — an
-    // infinite loop where each iteration re-triggers the panels' balance
-    // refresh effects. `untrack` excludes the read from dependency tracking.
-    $effect(() => {
-        if (transfer.state.phase === 'done') {
-            untrack(() => refreshSignal++);
-        }
-    });
+    function onChainChange(id: EvmChainId) {
+        evmChainId = id;
+        transfer.setShape({ direction, evmChainId: id, outboundFlow });
+    }
+
+    function onFlowChange(flow: OutboundFlow) {
+        outboundFlow = flow;
+        transfer.setShape({ direction, evmChainId, outboundFlow: flow });
+    }
 
     let bothConnected = $derived(!!stellar.address && !!evm);
     let busy = $derived(
@@ -70,6 +72,11 @@
             outboundFlow,
             amount: amount.trim(),
         });
+        // Skip refetch on error — the burn may not have landed, and a failed RPC
+        // call here would clobber the error state shown to the user.
+        if (transfer.state.phase === 'done') {
+            await Promise.all([stellarPanel?.refresh(), evmPanel?.refresh()]);
+        }
     }
 
     function reset() {
@@ -88,12 +95,24 @@
     </header>
 
     <div class="wallets">
-        <StellarPanel bind:freighter={stellar} bind:outboundFlow {refreshSignal} disabled={busy} />
-        <EvmPanel bind:wallet={evm} bind:chainId={evmChainId} disabled={busy} {refreshSignal} />
+        <StellarPanel
+            bind:this={stellarPanel}
+            bind:freighter={stellar}
+            {outboundFlow}
+            {onFlowChange}
+            disabled={busy}
+        />
+        <EvmPanel
+            bind:this={evmPanel}
+            bind:wallet={evm}
+            chainId={evmChainId}
+            {onChainChange}
+            disabled={busy}
+        />
     </div>
 
     <section class="action">
-        <DirectionSwitcher bind:direction disabled={busy} {evmLabel} />
+        <DirectionSwitcher {direction} {onDirectionChange} disabled={busy} {evmLabel} />
         <TransferForm
             {direction}
             {evmLabel}
