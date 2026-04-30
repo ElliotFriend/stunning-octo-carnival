@@ -9,7 +9,7 @@ The point of the demo is to make every step of CCTP visible: the **burn** on
 the source chain, Circle's **attestation**, and the **mint** on the
 destination chain, all in one screen.
 
-```
+```bash
 npm install
 npm run dev
 ```
@@ -37,12 +37,12 @@ You can flip to Base Sepolia at any time via the picker in the EVM panel.
 ## Faucets
 
 | You need | Where |
-|---|---|
-| Testnet XLM | https://faucet.stellar.org |
-| Testnet USDC on Stellar | https://faucet.circle.com (pick "Stellar Testnet") |
-| Testnet USDC on Arc | https://faucet.circle.com (pick "Arc Testnet") |
-| Testnet USDC on Base | https://faucet.circle.com (pick "Base Sepolia") |
-| Base Sepolia ETH | https://www.alchemy.com/faucets/base-sepolia |
+| --- | --- |
+| Testnet XLM | <https://lab.stellar.org/account/fund> |
+| Testnet USDC on Stellar | <https://faucet.circle.com> (pick "Stellar Testnet") |
+| Testnet USDC on Arc | <https://faucet.circle.com> (pick "Arc Testnet") |
+| Testnet USDC on Base | <https://faucet.circle.com> (pick "Base Sepolia") |
+| Base Sepolia ETH | <https://www.alchemy.com/faucets/base-sepolia> |
 
 You'll also need a USDC trustline on your Stellar testnet account before
 USDC can land. Freighter or LOBSTR will prompt you to add it on first
@@ -51,10 +51,10 @@ deposit.
 ## Network details
 
 | Chain | Chain ID | RPC | Explorer | CCTP domain |
-|---|---|---|---|---|
-| Arc Testnet | 5042002 | https://rpc.testnet.arc.network | https://testnet.arcscan.app | 26 |
-| Base Sepolia | 84532 | (your wallet's default) | https://sepolia.basescan.org | 6 |
-| Stellar Testnet | — | https://soroban-testnet.stellar.org | https://stellar.expert/explorer/testnet | 27 |
+| --- | --- | --- | --- | --- |
+| Arc Testnet | 5042002 | <https://rpc.testnet.arc.network> | <https://testnet.arcscan.app> | 26 |
+| Base Sepolia | 84532 | (your wallet's default) | <https://sepolia.basescan.org> | 6 |
+| Stellar Testnet | — | <https://soroban-testnet.stellar.org> | <https://stellar.expert/explorer/testnet> | 27 |
 
 ## How it works
 
@@ -63,24 +63,27 @@ CCTP burns USDC on the source chain and mints fresh USDC on the destination
 Stellar:
 
 | Contract | Purpose |
-|---|---|
+| --- | --- |
 | `TokenMessengerMinter` (`CDNG…RTHP`) | Burns USDC outbound, mints inbound |
 | `MessageTransmitter` (`CBJ6…VVJY`) | Generic message bus + attestation verifier |
 | `CctpForwarder` (`CA66…4VSZ`) | Routes inbound USDC to a regular Stellar account |
 
 On every EVM chain, CCTP V2 deploys to the same addresses:
+
 - `TokenMessengerV2` = `0x8FE6…2DAA`
 - `MessageTransmitterV2` = `0xE737…E275`
 
 Only USDC and the chain ID/domain differ per chain.
 
 ### Stellar → EVM
+
 1. `approve` USDC SAC for the `TokenMessengerMinter` (Soroban).
 2. Sign a Soroban tx calling `deposit_for_burn` on `TokenMessengerMinter`.
 3. Poll Circle's Iris API for the signed attestation.
 4. Sign an EVM tx calling `receiveMessage` on the destination's `MessageTransmitterV2`.
 
 ### EVM → Stellar
+
 This direction needs the `CctpForwarder` because CCTP messages can't tell a
 G-account from a C-contract — sending directly to a G-address would brick the funds.
 
@@ -107,7 +110,7 @@ This is a demo, not a bridge UX:
 
 ## Layout
 
-```
+```text
 src/lib/
   config.ts                  # EVM_CHAINS map, addresses, domains, RPC URLs
   stellar/                   # Freighter, USDC SAC, deposit_for_burn, mint_and_forward
