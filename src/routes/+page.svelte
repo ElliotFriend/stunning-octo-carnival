@@ -8,7 +8,14 @@
 	import { createTransferStore } from '$lib/stores/transfer.svelte';
 	import type { FreighterState } from '$lib/stellar/freighter';
 	import type { EvmWallet } from '$lib/evm/wallet';
-	import { DEFAULT_EVM_CHAIN, EVM_CHAINS, type Direction, type EvmChainId } from '$lib/config';
+	import {
+		DEFAULT_EVM_CHAIN,
+		DEFAULT_OUTBOUND_FLOW,
+		EVM_CHAINS,
+		type Direction,
+		type EvmChainId,
+		type OutboundFlow
+	} from '$lib/config';
 
 	let stellar = $state<FreighterState>({
 		installed: false,
@@ -18,15 +25,20 @@
 	let evm = $state<EvmWallet | null>(null);
 	let evmChainId = $state<EvmChainId>(DEFAULT_EVM_CHAIN);
 	let direction = $state<Direction>('stellar-to-evm');
+	let outboundFlow = $state<OutboundFlow>(DEFAULT_OUTBOUND_FLOW);
 	let amount = $state('');
 	// Bumped when a transfer finishes — panels watch this to refetch balances.
 	let refreshSignal = $state(0);
 
-	const transfer = createTransferStore('stellar-to-evm', DEFAULT_EVM_CHAIN);
+	const transfer = createTransferStore(
+		'stellar-to-evm',
+		DEFAULT_EVM_CHAIN,
+		DEFAULT_OUTBOUND_FLOW
+	);
 
 	// One effect, no store-state reads inside — avoids effect_update_depth_exceeded.
 	$effect(() => {
-		transfer.setShape({ direction, evmChainId });
+		transfer.setShape({ direction, evmChainId, outboundFlow });
 	});
 
 	// `refreshSignal++` reads + writes refreshSignal, which would make it a
@@ -55,6 +67,7 @@
 			stellarAddress: stellar.address,
 			evmWallet: evm,
 			evmChainId,
+			outboundFlow,
 			amount: amount.trim()
 		});
 	}
@@ -75,7 +88,12 @@
 	</header>
 
 	<div class="wallets">
-		<StellarPanel bind:freighter={stellar} {refreshSignal} />
+		<StellarPanel
+			bind:freighter={stellar}
+			bind:outboundFlow
+			{refreshSignal}
+			disabled={busy}
+		/>
 		<EvmPanel bind:wallet={evm} bind:chainId={evmChainId} disabled={busy} {refreshSignal} />
 	</div>
 

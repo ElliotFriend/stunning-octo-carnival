@@ -6,6 +6,7 @@
 		type FreighterState
 	} from '$lib/stellar/freighter';
 	import { formatUsdc, getUsdcBalance } from '$lib/stellar/usdc';
+	import type { OutboundFlow } from '$lib/config';
 
 	let {
 		freighter = $bindable<FreighterState>({
@@ -13,8 +14,15 @@
 			address: null,
 			networkPassphrase: null
 		}),
-		refreshSignal = 0
-	}: { freighter?: FreighterState; refreshSignal?: number } = $props();
+		outboundFlow = $bindable<OutboundFlow>('two-tx'),
+		refreshSignal = 0,
+		disabled = false
+	}: {
+		freighter?: FreighterState;
+		outboundFlow?: OutboundFlow;
+		refreshSignal?: number;
+		disabled?: boolean;
+	} = $props();
 
 	let balance = $state<bigint | null>(null);
 	let balanceError = $state<string | null>(null);
@@ -83,6 +91,38 @@
 		</div>
 		{#if balanceError}<p class="error">{balanceError}</p>{/if}
 	{/if}
+
+	<div class="flow-picker" role="tablist" aria-label="Stellar outbound flow">
+		<span class="flow-label" title="Only applies when bridging Stellar → EVM">
+			Outbound flow
+		</span>
+		<div class="flow-buttons">
+			<button
+				type="button"
+				class="chip"
+				class:active={outboundFlow === 'two-tx'}
+				disabled={disabled}
+				onclick={() => (outboundFlow = 'two-tx')}
+				role="tab"
+				aria-selected={outboundFlow === 'two-tx'}
+				title="Sign approve, then sign deposit_for_burn separately"
+			>
+				2 tx (direct)
+			</button>
+			<button
+				type="button"
+				class="chip"
+				class:active={outboundFlow === 'wrapper'}
+				disabled={disabled}
+				onclick={() => (outboundFlow = 'wrapper')}
+				role="tab"
+				aria-selected={outboundFlow === 'wrapper'}
+				title="One Soroban tx via wrapper contract — single Freighter prompt"
+			>
+				1 tx (wrapper)
+			</button>
+		</div>
+	</div>
 </section>
 
 <style>
@@ -185,5 +225,49 @@
 		color: var(--error);
 		font-size: 0.85rem;
 		margin: 0;
+	}
+
+	.flow-picker {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		margin-top: auto;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--border);
+	}
+
+	.flow-label {
+		font-size: 0.7rem;
+		color: var(--text-dim);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.flow-buttons {
+		display: flex;
+		gap: 0.4rem;
+	}
+
+	.chip {
+		flex: 1;
+		background: var(--bg-elev-2);
+		color: var(--text-muted);
+		border: 1px solid var(--border);
+		padding: 0.4rem 0.6rem;
+		border-radius: var(--radius);
+		font-size: 0.78rem;
+		font-weight: 500;
+		transition: all 120ms;
+	}
+
+	.chip:hover:not(:disabled) {
+		color: var(--text);
+		border-color: var(--border-strong);
+	}
+
+	.chip.active {
+		background: var(--accent-dim);
+		color: var(--text);
+		border-color: var(--accent);
 	}
 </style>

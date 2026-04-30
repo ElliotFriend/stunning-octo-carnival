@@ -102,3 +102,15 @@ export const STELLAR_MAX_FEE = 100_000n;
 export const EVM_MAX_FEE = 500n;
 
 export type Direction = 'stellar-to-evm' | 'evm-to-stellar';
+
+// On the Stellar→EVM side the user can pick between:
+//  - 'wrapper'  : one Soroban tx via the bridge wrapper contract (combined
+//                 approve + deposit_for_burn under one Freighter prompt)
+//  - 'two-tx'   : separate `approve` and `deposit_for_burn` invocations,
+//                 same as plain CCTP without the wrapper
+// Mostly here so the demo can show both flows side-by-side.
+export type OutboundFlow = 'wrapper' | 'two-tx';
+// Default to the plain CCTP path so the demo opens on the typical
+// `approve` → `deposit_for_burn` experience. Users can flip to the
+// wrapper-contract flow from the StellarPanel toggle.
+export const DEFAULT_OUTBOUND_FLOW: OutboundFlow = 'two-tx';

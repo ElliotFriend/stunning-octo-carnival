@@ -16,8 +16,47 @@ import {
 import { stellarRpc } from './client';
 import { simulateSignAndSubmit } from './tx';
 
+const tmm = new Contract(STELLAR.contracts.tokenMessengerMinter);
 const bridgeWrapper = new Contract(STELLAR.contracts.bridgeWrapper);
 const forwarder = new Contract(STELLAR.contracts.cctpForwarder);
+
+// Direct call to the TMM's `deposit_for_burn`. Caller must `approveUsdc` for
+// the TMM as a spender on USDC SAC first — the TMM pulls funds via
+// `transfer_from`, not user-authorized `transfer`. Two transactions total.
+export async function depositForBurnToEvm(args: {
+	caller: string;
+	amount: bigint; // Stellar 7-decimal subunits
+	destinationDomain: number;
+	evmRecipient: `0x${string}`;
+}): Promise<{ hash: string; sourceDomain: number }> {
+	const account = await stellarRpc.getAccount(args.caller);
+
+	const mintRecipient = leftPad32FromHex(args.evmRecipient);
+	const destinationCaller = ZERO_BYTES_32;
+
+	const tx = new TransactionBuilder(account, {
+		fee: BASE_FEE,
+		networkPassphrase: STELLAR.networkPassphrase
+	})
+		.addOperation(
+			tmm.call(
+				'deposit_for_burn',
+				Address.fromString(args.caller).toScVal(),
+				nativeToScVal(args.amount, { type: 'i128' }),
+				nativeToScVal(args.destinationDomain, { type: 'u32' }),
+				bytesN32(mintRecipient),
+				Address.fromString(STELLAR.contracts.usdc).toScVal(),
+				bytesN32(destinationCaller),
+				nativeToScVal(STELLAR_MAX_FEE, { type: 'i128' }),
+				nativeToScVal(FINALIZED_THRESHOLD, { type: 'u32' })
+			)
+		)
+		.setTimeout(60)
+		.build();
+
+	const hash = await simulateSignAndSubmit(tx);
+	return { hash, sourceDomain: STELLAR.domain };
+}
 
 // Calls the user-deployed wrapper contract's `approve_and_deposit`, which
 // internally `approve`s the TMM as a USDC spender and then invokes
