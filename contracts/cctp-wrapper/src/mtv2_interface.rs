@@ -1,6 +1,6 @@
 pub const WASM: &[u8] = soroban_sdk::contractfile!(
-    file = "message_transmitter_v2.wasm", sha256 =
-    "8927f7389410044b35b1d3d0d7d42ea4ed0677dea18cb1bd89be4a980566c614"
+    file = "message_transmitter_v2.wasm",
+    sha256 = "8927f7389410044b35b1d3d0d7d42ea4ed0677dea18cb1bd89be4a980566c614"
 );
 #[soroban_sdk::contractargs(name = "Mtv2Args")]
 #[soroban_sdk::contractclient(name = "Mtv2Client")]
@@ -34,10 +34,7 @@ pub trait Mtv2Contract {
         min_finality_threshold: u32,
         message_body: soroban_sdk::Bytes,
     );
-    fn __constructor(
-        env: soroban_sdk::Env,
-        params: MessageTransmitterV2ContractInitParams,
-    );
+    fn __constructor(env: soroban_sdk::Env, params: MessageTransmitterV2ContractInitParams);
     fn is_nonce_used(env: soroban_sdk::Env, nonce: soroban_sdk::BytesN<32>) -> bool;
     fn update_pauser(env: soroban_sdk::Env, new_pauser: soroban_sdk::Address);
     fn transfer_admin(
@@ -63,21 +60,12 @@ pub trait Mtv2Contract {
         new_owner: soroban_sdk::Address,
         expires_in_ledgers: u32,
     );
-    fn is_enabled_attester(
-        env: soroban_sdk::Env,
-        attester: soroban_sdk::BytesN<20>,
-    ) -> bool;
+    fn is_enabled_attester(env: soroban_sdk::Env, attester: soroban_sdk::BytesN<20>) -> bool;
     fn get_attester_manager(env: soroban_sdk::Env) -> Option<soroban_sdk::Address>;
-    fn get_enabled_attester(
-        env: soroban_sdk::Env,
-        index: u32,
-    ) -> soroban_sdk::BytesN<20>;
+    fn get_enabled_attester(env: soroban_sdk::Env, index: u32) -> soroban_sdk::BytesN<20>;
     fn get_signature_threshold(env: soroban_sdk::Env) -> Option<u32>;
     fn set_signature_threshold(env: soroban_sdk::Env, new_signature_threshold: u32);
-    fn update_attester_manager(
-        env: soroban_sdk::Env,
-        new_attester_manager: soroban_sdk::Address,
-    );
+    fn update_attester_manager(env: soroban_sdk::Env, new_attester_manager: soroban_sdk::Address);
     fn get_max_message_body_size(env: soroban_sdk::Env) -> u32;
     fn get_num_enabled_attesters(env: soroban_sdk::Env) -> u32;
     fn set_max_message_body_size(env: soroban_sdk::Env, max_message_body_size: u32);
@@ -583,4 +571,3 @@ pub struct OwnershipRenounced {
 pub struct OwnershipTransferCompleted {
     pub new_owner: soroban_sdk::Address,
 }
-

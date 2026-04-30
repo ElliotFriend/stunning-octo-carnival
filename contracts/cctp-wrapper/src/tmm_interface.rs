@@ -1,6 +1,6 @@
 pub const WASM: &[u8] = soroban_sdk::contractfile!(
-    file = "token_messenger_minter.wasm", sha256 =
-    "a04c09f4bf064cfafb7e4e931752de15a216af1d59373bdd9d53908e7d29a9fe"
+    file = "token_messenger_minter.wasm",
+    sha256 = "a04c09f4bf064cfafb7e4e931752de15a216af1d59373bdd9d53908e7d29a9fe"
 );
 #[soroban_sdk::contractargs(name = "TmmArgs")]
 #[soroban_sdk::contractclient(name = "TmmClient")]
@@ -19,11 +19,7 @@ pub trait TmmContract {
     fn get_pauser(env: soroban_sdk::Env) -> Option<soroban_sdk::Address>;
     fn get_min_fee(env: soroban_sdk::Env, burn_token: soroban_sdk::Address) -> i128;
     fn get_rescuer(env: soroban_sdk::Env) -> Option<soroban_sdk::Address>;
-    fn set_min_fee(
-        env: soroban_sdk::Env,
-        burn_token: soroban_sdk::Address,
-        min_fee: i128,
-    );
+    fn set_min_fee(env: soroban_sdk::Env, burn_token: soroban_sdk::Address, min_fee: i128);
     fn un_denylist(env: soroban_sdk::Env, account: soroban_sdk::Address);
     fn accept_admin(env: soroban_sdk::Env);
     fn rescue_sep41(
@@ -32,10 +28,7 @@ pub trait TmmContract {
         to: soroban_sdk::Address,
         amount: i128,
     );
-    fn __constructor(
-        env: soroban_sdk::Env,
-        params: TokenMessengerMinterV2ContractInitParams,
-    );
+    fn __constructor(env: soroban_sdk::Env, params: TokenMessengerMinterV2ContractInitParams);
     fn is_denylisted(env: soroban_sdk::Env, account: soroban_sdk::Address) -> bool;
     fn update_pauser(env: soroban_sdk::Env, new_pauser: soroban_sdk::Address);
     fn get_denylister(env: soroban_sdk::Env) -> Option<soroban_sdk::Address>;
@@ -90,19 +83,13 @@ pub trait TmmContract {
         expires_in_ledgers: u32,
     );
     fn get_token_controller(env: soroban_sdk::Env) -> Option<soroban_sdk::Address>;
-    fn set_token_controller(
-        env: soroban_sdk::Env,
-        new_token_controller: soroban_sdk::Address,
-    );
+    fn set_token_controller(env: soroban_sdk::Env, new_token_controller: soroban_sdk::Address);
     fn get_min_fee_controller(env: soroban_sdk::Env) -> Option<soroban_sdk::Address>;
     fn get_swap_minter_config(
         env: soroban_sdk::Env,
         local_token: soroban_sdk::Address,
     ) -> Option<SwapMinterConfig>;
-    fn set_min_fee_controller(
-        env: soroban_sdk::Env,
-        new_min_fee_controller: soroban_sdk::Address,
-    );
+    fn set_min_fee_controller(env: soroban_sdk::Env, new_min_fee_controller: soroban_sdk::Address);
     fn set_swap_minter_config(
         env: soroban_sdk::Env,
         local_token: soroban_sdk::Address,
@@ -120,10 +107,7 @@ pub trait TmmContract {
         local_decimals: u32,
         canonical_decimals: u32,
     );
-    fn remove_swap_minter_config(
-        env: soroban_sdk::Env,
-        local_token: soroban_sdk::Address,
-    );
+    fn remove_swap_minter_config(env: soroban_sdk::Env, local_token: soroban_sdk::Address);
     fn add_remote_token_messenger(
         env: soroban_sdk::Env,
         domain: u32,
@@ -687,4 +671,3 @@ pub struct OwnershipRenounced {
 pub struct OwnershipTransferCompleted {
     pub new_owner: soroban_sdk::Address,
 }
-
