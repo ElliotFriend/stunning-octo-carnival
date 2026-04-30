@@ -6,8 +6,8 @@ import {
 	type Direction,
 	type EvmChainId
 } from '$lib/config';
-import { depositForBurnToBase, mintAndForward } from '$lib/stellar/cctp';
-import { approveUsdc, getUsdcAllowance, parseUsdcStellar } from '$lib/stellar/usdc';
+import { bridgeUsdcToEvm, mintAndForward } from '$lib/stellar/cctp';
+import { parseUsdcStellar } from '$lib/stellar/usdc';
 import {
 	approveEvmUsdc,
 	getEvmUsdcAllowance,
@@ -64,8 +64,11 @@ function stepsFor(direction: Direction, evmChainId: EvmChainId): Step[] {
 	const evmLabel = EVM_CHAINS[evmChainId].label;
 	if (direction === 'stellar-to-evm') {
 		return [
-			{ key: 'approve', label: 'Approve TokenMessenger on Stellar', status: 'pending' },
-			{ key: 'burn', label: 'Burn USDC on Stellar', status: 'pending' },
+			{
+				key: 'burn',
+				label: 'Approve + burn USDC on Stellar (one tx)',
+				status: 'pending'
+			},
 			{ key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
 			{ key: 'mint', label: `Mint USDC on ${evmLabel}`, status: 'pending' }
 		];
@@ -117,46 +120,14 @@ export function createTransferStore(
 		const stellarAmount = parseUsdcStellar(args.amount);
 		const evmCfg = EVM_CHAINS[args.evmChainId];
 
-		// Approve TMM as a spender on USDC SAC. The contract pulls tokens via
-		// SEP-41 `transfer_from`, which requires a pre-existing allowance —
-		// Soroban auth on the burn tx alone does not authorize the spend.
-		state.phase = 'approving';
-		patchStep('approve', { status: 'active', startedAt: Date.now() });
-		try {
-			const existing = await getUsdcAllowance({
-				from: args.stellarAddress,
-				spender: STELLAR.contracts.tokenMessengerMinter
-			});
-			if (existing < stellarAmount) {
-				const hash = await approveUsdc({
-					from: args.stellarAddress,
-					spender: STELLAR.contracts.tokenMessengerMinter,
-					amount: stellarAmount
-				});
-				patchStep('approve', {
-					status: 'done',
-					endedAt: Date.now(),
-					hash,
-					hashUrl: `${STELLAR.explorer}/tx/${hash}`,
-					detail: 'allowance set'
-				});
-			} else {
-				patchStep('approve', {
-					status: 'done',
-					endedAt: Date.now(),
-					detail: 'sufficient allowance already set'
-				});
-			}
-		} catch (err) {
-			return fail(errMsg(err));
-		}
-
-		// Burn on Stellar
+		// Approve + burn in one Soroban transaction via the wrapper contract.
+		// Soroban's auth tree authorizes both inner calls from a single
+		// Freighter signature.
 		state.phase = 'burning';
 		patchStep('burn', { status: 'active', startedAt: Date.now() });
 		let burnHash: string;
 		try {
-			const result = await depositForBurnToBase({
+			const result = await bridgeUsdcToEvm({
 				caller: args.stellarAddress,
 				amount: stellarAmount,
 				destinationDomain: evmCfg.domain,

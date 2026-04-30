@@ -16,12 +16,15 @@ import {
 import { stellarRpc } from './client';
 import { simulateSignAndSubmit } from './tx';
 
-const tmm = new Contract(STELLAR.contracts.tokenMessengerMinter);
+const bridgeWrapper = new Contract(STELLAR.contracts.bridgeWrapper);
 const forwarder = new Contract(STELLAR.contracts.cctpForwarder);
 
-// Caller must `approveUsdc(spender=TMM, amount)` on the USDC SAC first — the
-// TMM contract pulls funds via `transfer_from`, not user-authorized `transfer`.
-export async function depositForBurnToBase(args: {
+// Calls the user-deployed wrapper contract's `approve_and_deposit`, which
+// internally `approve`s the TMM as a USDC spender and then invokes
+// `deposit_for_burn` — both within one Soroban transaction. Soroban's auth
+// tree lets a single user signature authorize both nested calls, so the user
+// sees one Freighter prompt and pays one network fee.
+export async function bridgeUsdcToEvm(args: {
 	caller: string;
 	amount: bigint; // Stellar 7-decimal subunits
 	destinationDomain: number;
@@ -30,20 +33,21 @@ export async function depositForBurnToBase(args: {
 	const account = await stellarRpc.getAccount(args.caller);
 
 	const mintRecipient = leftPad32FromHex(args.evmRecipient);
-	const destinationCaller = ZERO_BYTES_32; // permissionless: any EVM caller can mint
+	const destinationCaller = ZERO_BYTES_32;
 
 	const tx = new TransactionBuilder(account, {
 		fee: BASE_FEE,
 		networkPassphrase: STELLAR.networkPassphrase
 	})
 		.addOperation(
-			tmm.call(
-				'deposit_for_burn',
+			bridgeWrapper.call(
+				'approve_and_deposit',
 				Address.fromString(args.caller).toScVal(),
+				Address.fromString(STELLAR.contracts.usdc).toScVal(),
+				Address.fromString(STELLAR.contracts.tokenMessengerMinter).toScVal(),
 				nativeToScVal(args.amount, { type: 'i128' }),
 				nativeToScVal(args.destinationDomain, { type: 'u32' }),
 				bytesN32(mintRecipient),
-				Address.fromString(STELLAR.contracts.usdc).toScVal(),
 				bytesN32(destinationCaller),
 				nativeToScVal(STELLAR_MAX_FEE, { type: 'i128' }),
 				nativeToScVal(FINALIZED_THRESHOLD, { type: 'u32' })
