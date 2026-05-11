@@ -7,12 +7,7 @@ import {
     xdr,
 } from '@stellar/stellar-sdk';
 import { Buffer } from 'buffer';
-import {
-    STELLAR,
-    CCTP_CANONICAL_DECIMALS,
-    FINALIZED_THRESHOLD,
-    STELLAR_MAX_FEE,
-} from '$lib/config';
+import { STELLAR, FINALIZED_THRESHOLD, STELLAR_MAX_FEE } from '$lib/config';
 import { stellarRpc } from './client';
 import { simulateSignAndSubmit } from './tx';
 
@@ -143,17 +138,4 @@ const ZERO_BYTES_32 = new Uint8Array(32);
 function bytesN32(bytes: Uint8Array): xdr.ScVal {
     if (bytes.length !== 32) throw new Error(`bytesN32 expects 32 bytes, got ${bytes.length}`);
     return xdr.ScVal.scvBytes(Buffer.from(bytes));
-}
-
-// CCTP canonical amount uses 6 decimals; Stellar USDC stores 7. The contract
-// truncates the 7th decimal on outbound. Surface that to the UI so users see
-// what will actually arrive.
-export function canonicalFromStellarAmount(stellar7: bigint): bigint {
-    const scale = 10n ** BigInt(STELLAR.usdc.decimals - CCTP_CANONICAL_DECIMALS);
-    return stellar7 / scale;
-}
-
-export function stellarAmountFromCanonical(canonical6: bigint): bigint {
-    const scale = 10n ** BigInt(STELLAR.usdc.decimals - CCTP_CANONICAL_DECIMALS);
-    return canonical6 * scale;
 }

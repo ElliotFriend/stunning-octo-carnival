@@ -8,5 +8,11 @@ bun.lockb
 # Miscellaneous
 /static/
 
+# Foundry build artifacts + submodules
+contracts/evm/cctp-wrapper/out/
+contracts/evm/cctp-wrapper/cache/
+contracts/evm/cctp-wrapper/lib/
+contracts/evm/cctp-wrapper/broadcast/
+
 # Claude Code per-user state (rewritten by the CLI)
 .claude/

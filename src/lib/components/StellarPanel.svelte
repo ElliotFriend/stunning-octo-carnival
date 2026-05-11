@@ -3,6 +3,7 @@
     import { connectFreighter, detectFreighter, type FreighterState } from '$lib/stellar/freighter';
     import { formatUsdc, getUsdcBalance } from '$lib/stellar/usdc';
     import type { Direction, OutboundFlow } from '$lib/config';
+    import { shortAddr } from '$lib/utils';
 
     let {
         freighter = $bindable<FreighterState>({
@@ -61,10 +62,6 @@
             connecting = false;
         }
     }
-
-    function shortAddr(a: string) {
-        return `${a.slice(0, 6)}…${a.slice(-6)}`;
-    }
 </script>
 
 <section class="panel">
@@ -80,7 +77,7 @@
         {#if connectError}<p class="error">{connectError}</p>{/if}
     {:else}
         <div class="addr-row">
-            <code class="addr" title={freighter.address}>{shortAddr(freighter.address)}</code>
+            <code class="addr" title={freighter.address}>{shortAddr(freighter.address, 6, 6)}</code>
             <button class="link" onclick={refreshBalance}>refresh</button>
         </div>
         <div class="balance">

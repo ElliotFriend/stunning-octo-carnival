@@ -110,7 +110,3 @@ export function parseUsdcStellar(value: string): bigint {
     const padded = frac.padEnd(STELLAR.usdc.decimals, '0');
     return BigInt(whole) * 10n ** BigInt(STELLAR.usdc.decimals) + BigInt(padded || '0');
 }
-
-export function i128(value: bigint) {
-    return nativeToScVal(value, { type: 'i128' });
-}

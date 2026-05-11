@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onDestroy } from 'svelte';
     import { EVM_CHAINS } from '$lib/config';
+    import { shortAddr } from '$lib/utils';
     import type { TransferState } from '$lib/stores/transfer.svelte';
 
     let { transfer }: { transfer: TransferState } = $props();
@@ -33,10 +34,6 @@
         if (remaining <= 0) return 'any moment now';
         const m = Math.ceil(remaining / 60_000);
         return `~${m} min remaining`;
-    }
-
-    function shortHash(h: string) {
-        return h.length > 16 ? `${h.slice(0, 8)}…${h.slice(-6)}` : h;
     }
 
     function isLongWait(stepKey: string, status: string) {
@@ -123,7 +120,7 @@
                             target="_blank"
                             rel="external noreferrer"
                         >
-                            <code>{shortHash(step.hash)}</code>
+                            <code>{shortAddr(step.hash, 8, 6)}</code>
                             <span class="ext">↗</span>
                         </a>
                     {/if}

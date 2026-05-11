@@ -9,8 +9,20 @@ import type { EvmWallet } from './wallet';
 // the chain actually deployed — guessing "USD Coin" vs "USDC" is a common
 // source of "invalid signature" reverts.
 const usdcPermitAbi = [
-    { type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-    { type: 'function', name: 'version', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
+    {
+        type: 'function',
+        name: 'name',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ type: 'string' }],
+    },
+    {
+        type: 'function',
+        name: 'version',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ type: 'string' }],
+    },
     {
         type: 'function',
         name: 'nonces',

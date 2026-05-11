@@ -10,7 +10,9 @@
         type EvmWallet,
     } from '$lib/evm/wallet';
     import { formatEvmUsdc, getEvmUsdcBalance } from '$lib/evm/usdc';
+    import { fetchSendCallsCapability, type SendCallsCapability } from '$lib/evm/capabilities';
     import { EVM_CHAINS, type Direction, type EvmChainId, type InboundFlow } from '$lib/config';
+    import { shortAddr } from '$lib/utils';
 
     let {
         wallet = $bindable<EvmWallet | null>(null),
@@ -31,18 +33,36 @@
     let connecting = $state(false);
     let connectError = $state<string | null>(null);
     let pickerProviders = $state<EvmProviderInfo[] | null>(null);
+    // EIP-5792 capability for (wallet, chainId). Refreshed via explicit
+    // dataflow on connect / chain-switch (no $effect).
+    let sendCallsCap = $state<SendCallsCapability>({ supported: false, atomic: false });
 
     let selectedCfg = $derived(EVM_CHAINS[chainId]);
     let onCorrectChain = $derived(!!wallet && wallet.chainId === selectedCfg.chain.id);
     let wrapperAvailable = $derived(!!selectedCfg.bridgeWrapper);
+    let sendCallsAvailable = $derived(sendCallsCap.supported);
 
     onMount(async () => {
         const existing = await detectExistingEvm();
         if (existing) {
             wallet = existing;
             await refreshBalance();
+            await refreshSendCallsCap();
         }
     });
+
+    async function refreshSendCallsCap() {
+        if (!wallet) {
+            sendCallsCap = { supported: false, atomic: false };
+            return;
+        }
+        sendCallsCap = await fetchSendCallsCapability(wallet, chainId);
+        // If the user had send-calls selected but it's no longer available
+        // (different wallet, different chain), drop back to two-tx.
+        if (!sendCallsCap.supported && inboundFlow === 'send-calls') {
+            inboundFlow = 'two-tx';
+        }
+    }
 
     async function refreshBalance() {
         if (!wallet) {
@@ -89,6 +109,7 @@
             w = await ensureChain(w, chainId);
             wallet = w;
             await refreshBalance();
+            await refreshSendCallsCap();
         } catch (err) {
             connectError = err instanceof Error ? err.message : String(err);
         } finally {
@@ -103,6 +124,7 @@
         try {
             wallet = await ensureChain(wallet, chainId);
             await refreshBalance();
+            await refreshSendCallsCap();
         } catch (err) {
             connectError = err instanceof Error ? err.message : String(err);
         }
@@ -121,6 +143,7 @@
         } else {
             // No wallet to switch — just clear the stale balance for the previous chain.
             balance = null;
+            sendCallsCap = { supported: false, atomic: false };
         }
     }
 
@@ -128,10 +151,8 @@
         await disconnectEvm(wallet?.provider);
         wallet = null;
         balance = null;
-    }
-
-    function shortAddr(a: string) {
-        return `${a.slice(0, 6)}…${a.slice(-4)}`;
+        sendCallsCap = { supported: false, atomic: false };
+        if (inboundFlow === 'send-calls') inboundFlow = 'two-tx';
     }
 </script>
 
@@ -220,7 +241,7 @@
                     type="button"
                     class="chip"
                     class:active={inboundFlow === 'two-tx'}
-                    disabled={disabled}
+                    {disabled}
                     onclick={() => (inboundFlow = 'two-tx')}
                     role="tab"
                     aria-selected={inboundFlow === 'two-tx'}
@@ -241,6 +262,22 @@
                         : 'No CctpWrapper deployed on this chain — set bridgeWrapper in config.ts'}
                 >
                     1 tx (permit)
+                </button>
+                <button
+                    type="button"
+                    class="chip"
+                    class:active={inboundFlow === 'send-calls'}
+                    disabled={disabled || !sendCallsAvailable}
+                    onclick={() => (inboundFlow = 'send-calls')}
+                    role="tab"
+                    aria-selected={inboundFlow === 'send-calls'}
+                    title={sendCallsAvailable
+                        ? sendCallsCap.atomic
+                            ? 'Wallet bundles approve + burn atomically (EIP-5792 + EIP-7702 / smart wallet) — one click, one tx'
+                            : 'Wallet bundles approve + burn behind one prompt, but submits them sequentially (still two txs)'
+                        : 'This wallet does not advertise EIP-5792 wallet_sendCalls on this chain'}
+                >
+                    1 click {sendCallsCap.atomic ? '(atomic)' : '(batched)'}
                 </button>
             </div>
         </div>

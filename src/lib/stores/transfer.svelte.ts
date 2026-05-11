@@ -15,6 +15,7 @@ import {
     bridgeWithPermitToStellar,
     depositForBurnWithHookToStellar,
     receiveMessageOnEvm,
+    sendCallsBridgeToStellar,
 } from '$lib/evm/cctp';
 import { pollAttestation, type IrisMessage } from '$lib/circle/iris';
 import type { EvmWallet } from '$lib/evm/wallet';
@@ -94,6 +95,17 @@ function stepsFor(
             {
                 key: 'burn',
                 label: `Permit + burn USDC on ${evmLabel} (one tx)`,
+                status: 'pending',
+            },
+            { key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
+            { key: 'mint', label: 'Mint USDC on Stellar (forwarder)', status: 'pending' },
+        ];
+    }
+    if (inboundFlow === 'send-calls') {
+        return [
+            {
+                key: 'burn',
+                label: `Approve + burn USDC on ${evmLabel} (batched by wallet)`,
                 status: 'pending',
             },
             { key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
@@ -296,6 +308,25 @@ export function createTransferStore(
             });
             if (h === null) return;
             burnHash = h;
+        } else if (args.inboundFlow === 'send-calls') {
+            // EIP-5792: the WALLET bundles approve + depositForBurnWithHook
+            // behind one user confirmation. On smart-wallets / EIP-7702 EOAs
+            // this is one atomic tx; on plain EOAs the wallet still presents
+            // one prompt but submits two txs sequentially.
+            const h = await performStep('burning', 'burn', async () => {
+                const hash = await sendCallsBridgeToStellar({
+                    chainId: args.evmChainId,
+                    wallet: args.evmWallet,
+                    amount: evmAmount,
+                    stellarRecipient: args.stellarAddress,
+                });
+                return {
+                    result: hash,
+                    patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) },
+                };
+            });
+            if (h === null) return;
+            burnHash = h;
         } else {
             const approved = await performStep('approving', 'approve', async () => {
                 const allowance = await getEvmUsdcAllowance(
@@ -403,9 +434,10 @@ export function createTransferStore(
     }
 
     // Pick up an interrupted (or third-party) transfer at the attest step.
-    // The wrapper-vs-two-tx distinction only matters for the burn we're
-    // skipping, so we always render the two-tx step list with approve+burn
-    // pre-marked done.
+    // Which flow originally produced the burn is irrelevant here — we're
+    // skipping straight to attest + mint — so we render the two-tx step
+    // list with approve + burn pre-marked done, regardless of whether the
+    // original transfer used the wrapper, permit, or send-calls path.
     async function resume(args: {
         burnHash: string;
         direction: Direction;

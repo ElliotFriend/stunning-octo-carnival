@@ -9,6 +9,7 @@
         type OutboundFlow,
     } from '$lib/config';
     import { parseUsdcStellar, formatUsdc } from '$lib/stellar/usdc';
+    import { shortAddr } from '$lib/utils';
 
     let {
         stellarAddress,
@@ -65,20 +66,9 @@
     // don't expose in the demo.
     const ZERO_BYTES_32_HEX = `0x${'0'.repeat(64)}` as const;
 
-    function shortAddr(a: string, head = 6, tail = 4): string {
-        if (a.length <= head + tail + 1) return a;
-        return `${a.slice(0, head)}…${a.slice(-tail)}`;
-    }
-
-    function shortStrkey(a: string): string {
-        // G-addresses are long; trim them similarly to EVM addresses.
-        return shortAddr(a, 6, 6);
-    }
-
-    function shortContract(a: string): string {
-        // Soroban contract IDs (C…) are 56 chars; show a bit more on each side.
-        return shortAddr(a, 6, 6);
-    }
+    // G-addresses and Soroban C-contracts are 56 chars; show 6+6 trimmed.
+    const shortStrkey = (a: string) => shortAddr(a, 6, 6);
+    const shortContract = (a: string) => shortAddr(a, 6, 6);
 </script>
 
 <section class="burn-preview">
