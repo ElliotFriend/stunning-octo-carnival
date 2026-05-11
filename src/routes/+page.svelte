@@ -138,6 +138,9 @@
         {#if !bothConnected}
             <p class="hint">Connect both wallets to enable transfers.</p>
         {/if}
+        {#if transfer.state.phase === 'idle'}
+            <ResumeForm {direction} {bothConnected} disabled={busy} onResume={resume} />
+        {/if}
         {#if direction === 'evm-to-stellar' && stellar.address && evm && transfer.state.phase === 'idle'}
             <EvmBurnPreview
                 evmAddress={evm.address}
@@ -157,9 +160,6 @@
                 {amount}
                 {outboundFlow}
             />
-        {/if}
-        {#if transfer.state.phase === 'idle'}
-            <ResumeForm {direction} {bothConnected} disabled={busy} onResume={resume} />
         {/if}
     </section>
 
