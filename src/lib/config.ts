@@ -56,6 +56,11 @@ export type EvmChainConfig = {
      * burn. Undefined means "fast enough that a wait UI isn't needed."
      */
     attestationEtaMs?: number;
+    /**
+     * User-deployed CctpWrapper contract. When present, the EVM→Stellar flow
+     * can take the single-signature permit path instead of approve + burn.
+     */
+    bridgeWrapper?: `0x${string}`;
 };
 
 export const EVM_CHAINS: Record<'arc' | 'base', EvmChainConfig> = {
@@ -68,6 +73,7 @@ export const EVM_CHAINS: Record<'arc' | 'base', EvmChainConfig> = {
         usdc: '0x3600000000000000000000000000000000000000',
         usdcDecimals: 6,
         gasNote: 'Gas paid in USDC.',
+        bridgeWrapper: '0xe87b2FCD2675f49785B46f5e84E1019961637eBd' // TODO: deploy contracts-evm/cctp-wrapper and paste address
     },
     base: {
         id: 'base',
@@ -79,6 +85,7 @@ export const EVM_CHAINS: Record<'arc' | 'base', EvmChainConfig> = {
         usdcDecimals: 6,
         gasNote: 'Gas paid in ETH.',
         attestationEtaMs: 15 * 60_000,
+        bridgeWrapper: '0xe87b2FCD2675f49785B46f5e84E1019961637eBd', // TODO: deploy contracts-evm/cctp-wrapper and paste address
     },
 };
 
@@ -111,3 +118,9 @@ export type OutboundFlow = 'wrapper' | 'two-tx';
 // `approve` → `deposit_for_burn` experience. Users can flip to the
 // wrapper-contract flow from the StellarPanel toggle.
 export const DEFAULT_OUTBOUND_FLOW: OutboundFlow = 'two-tx';
+
+// EVM→Stellar mirror of OutboundFlow. Values match: 'wrapper' uses the
+// CctpWrapper (EIP-2612 permit + bundled depositForBurnWithHook in one tx);
+// 'two-tx' is plain CCTP: approve, then depositForBurnWithHook.
+export type InboundFlow = 'wrapper' | 'two-tx';
+export const DEFAULT_INBOUND_FLOW: InboundFlow = 'two-tx';

@@ -12,10 +12,12 @@
     import type { EvmWallet } from '$lib/evm/wallet';
     import {
         DEFAULT_EVM_CHAIN,
+        DEFAULT_INBOUND_FLOW,
         DEFAULT_OUTBOUND_FLOW,
         EVM_CHAINS,
         type Direction,
         type EvmChainId,
+        type InboundFlow,
         type OutboundFlow,
     } from '$lib/config';
 
@@ -28,6 +30,7 @@
     let evmChainId = $state<EvmChainId>(DEFAULT_EVM_CHAIN);
     let direction = $state<Direction>('stellar-to-evm');
     let outboundFlow = $state<OutboundFlow>(DEFAULT_OUTBOUND_FLOW);
+    let inboundFlow = $state<InboundFlow>(DEFAULT_INBOUND_FLOW);
     let amount = $state('');
 
     // Component instance handles, populated by `bind:this`. Used to imperatively
@@ -39,6 +42,7 @@
         'stellar-to-evm',
         DEFAULT_EVM_CHAIN,
         DEFAULT_OUTBOUND_FLOW,
+        DEFAULT_INBOUND_FLOW,
     );
 
     let bothConnected = $derived(!!stellar.address && !!evm);
@@ -59,6 +63,7 @@
             evmWallet: evm,
             evmChainId,
             outboundFlow,
+            inboundFlow,
             amount: amount.trim(),
         });
         // Skip refetch on error — the burn may not have landed, and a failed RPC
@@ -109,6 +114,8 @@
             bind:this={evmPanel}
             bind:wallet={evm}
             bind:chainId={evmChainId}
+            bind:inboundFlow
+            {direction}
             disabled={busy}
         />
     </div>

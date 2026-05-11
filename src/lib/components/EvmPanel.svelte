@@ -10,15 +10,19 @@
         type EvmWallet,
     } from '$lib/evm/wallet';
     import { formatEvmUsdc, getEvmUsdcBalance } from '$lib/evm/usdc';
-    import { EVM_CHAINS, type EvmChainId } from '$lib/config';
+    import { EVM_CHAINS, type Direction, type EvmChainId, type InboundFlow } from '$lib/config';
 
     let {
         wallet = $bindable<EvmWallet | null>(null),
         chainId = $bindable<EvmChainId>('arc'),
+        inboundFlow = $bindable<InboundFlow>('two-tx'),
+        direction,
         disabled = false,
     }: {
         wallet?: EvmWallet | null;
         chainId?: EvmChainId;
+        inboundFlow?: InboundFlow;
+        direction: Direction;
         disabled?: boolean;
     } = $props();
 
@@ -30,6 +34,7 @@
 
     let selectedCfg = $derived(EVM_CHAINS[chainId]);
     let onCorrectChain = $derived(!!wallet && wallet.chainId === selectedCfg.chain.id);
+    let wrapperAvailable = $derived(!!selectedCfg.bridgeWrapper);
 
     onMount(async () => {
         const existing = await detectExistingEvm();
@@ -106,6 +111,11 @@
     async function pickChain(id: EvmChainId) {
         if (id === chainId) return;
         chainId = id;
+        // If switching to a chain without a deployed wrapper, drop back to
+        // two-tx so the user doesn't submit with a flow this chain can't run.
+        if (!EVM_CHAINS[id].bridgeWrapper && inboundFlow === 'wrapper') {
+            inboundFlow = 'two-tx';
+        }
         if (wallet) {
             await switchChain();
         } else {
@@ -200,6 +210,40 @@
             {connecting ? 'Connecting…' : 'Connect EVM Wallet'}
         </button>
         {#if connectError}<p class="error">{connectError}</p>{/if}
+    {/if}
+
+    {#if direction === 'evm-to-stellar'}
+        <div class="flow-picker" role="tablist" aria-label="EVM inbound flow">
+            <span class="flow-label">Inbound flow</span>
+            <div class="flow-buttons">
+                <button
+                    type="button"
+                    class="chip"
+                    class:active={inboundFlow === 'two-tx'}
+                    disabled={disabled}
+                    onclick={() => (inboundFlow = 'two-tx')}
+                    role="tab"
+                    aria-selected={inboundFlow === 'two-tx'}
+                    title="Sign approve, then sign depositForBurnWithHook separately"
+                >
+                    2 tx (direct)
+                </button>
+                <button
+                    type="button"
+                    class="chip"
+                    class:active={inboundFlow === 'wrapper'}
+                    disabled={disabled || !wrapperAvailable}
+                    onclick={() => (inboundFlow = 'wrapper')}
+                    role="tab"
+                    aria-selected={inboundFlow === 'wrapper'}
+                    title={wrapperAvailable
+                        ? 'One tx via CctpWrapper — sign an EIP-2612 permit, then submit one transaction'
+                        : 'No CctpWrapper deployed on this chain — set bridgeWrapper in config.ts'}
+                >
+                    1 tx (permit)
+                </button>
+            </div>
+        </div>
     {/if}
 </section>
 
@@ -392,6 +436,32 @@
 
     .picker-cancel {
         align-self: flex-start;
+    }
+
+    .flow-picker {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        margin-top: auto;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .flow-label {
+        font-size: 0.7rem;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .flow-buttons {
+        display: flex;
+        gap: 0.4rem;
+    }
+
+    .chip:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
     }
 
     .wrong-chain {

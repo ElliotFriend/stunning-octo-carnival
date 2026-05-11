@@ -9,6 +9,7 @@ import {
     type EvmChainId,
 } from '$lib/config';
 import { getPublicClient } from './client';
+import { signEvmUsdcPermit } from './usdc';
 import type { EvmWallet } from './wallet';
 
 // Minimal ABIs for the V2 contracts. Full ABIs are large and we only call
@@ -27,6 +28,32 @@ export const tokenMessengerV2Abi = [
             { name: 'maxFee', type: 'uint256' },
             { name: 'minFinalityThreshold', type: 'uint32' },
             { name: 'hookData', type: 'bytes' },
+        ],
+        outputs: [],
+    },
+] as const;
+
+// User-deployed wrapper (contracts-evm/cctp-wrapper). Bundles
+// `usdc.permit` + `transferFrom` + `approve` + `depositForBurnWithHook`
+// into one tx so the user signs an EIP-712 permit message and submits one
+// transaction — analogous to the Soroban `approve_and_deposit` wrapper.
+export const cctpWrapperAbi = [
+    {
+        type: 'function',
+        name: 'bridgeWithPermit',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'amount', type: 'uint256' },
+            { name: 'destinationDomain', type: 'uint32' },
+            { name: 'mintRecipient', type: 'bytes32' },
+            { name: 'destinationCaller', type: 'bytes32' },
+            { name: 'maxFee', type: 'uint256' },
+            { name: 'minFinalityThreshold', type: 'uint32' },
+            { name: 'hookData', type: 'bytes' },
+            { name: 'permitDeadline', type: 'uint256' },
+            { name: 'permitV', type: 'uint8' },
+            { name: 'permitR', type: 'bytes32' },
+            { name: 'permitS', type: 'bytes32' },
         ],
         outputs: [],
     },
@@ -102,6 +129,55 @@ export async function depositForBurnWithHookToStellar(args: {
             EVM_MAX_FEE,
             FINALIZED_THRESHOLD,
             hookData,
+        ],
+    });
+    await getPublicClient(args.chainId).waitForTransactionReceipt({ hash });
+    return hash;
+}
+
+// One-signature, one-tx variant of depositForBurnWithHookToStellar.
+// Throws if the chain config has no `bridgeWrapper` address — i.e. the
+// wrapper hasn't been deployed yet for this chain.
+export async function bridgeWithPermitToStellar(args: {
+    chainId: EvmChainId;
+    wallet: EvmWallet;
+    amount: bigint;
+    stellarRecipient: string;
+}): Promise<`0x${string}`> {
+    const cfg = EVM_CHAINS[args.chainId];
+    if (!cfg.bridgeWrapper) {
+        throw new Error(
+            `No CctpWrapper deployed for ${cfg.label}. Deploy contracts-evm/cctp-wrapper and set bridgeWrapper in config.`,
+        );
+    }
+    const forwarderBytes32 = strkeyToBytes32(STELLAR.contracts.cctpForwarder);
+    const hookData = encodeStellarForwarderHookData(args.stellarRecipient);
+
+    const permit = await signEvmUsdcPermit({
+        chainId: args.chainId,
+        wallet: args.wallet,
+        spender: cfg.bridgeWrapper,
+        value: args.amount,
+    });
+
+    const hash = await args.wallet.walletClient.writeContract({
+        account: args.wallet.address,
+        chain: cfg.chain,
+        address: cfg.bridgeWrapper,
+        abi: cctpWrapperAbi,
+        functionName: 'bridgeWithPermit',
+        args: [
+            args.amount,
+            STELLAR.domain,
+            forwarderBytes32,
+            forwarderBytes32, // destinationCaller MUST equal mintRecipient (the forwarder)
+            EVM_MAX_FEE,
+            FINALIZED_THRESHOLD,
+            hookData,
+            permit.deadline,
+            permit.v,
+            permit.r,
+            permit.s,
         ],
     });
     await getPublicClient(args.chainId).waitForTransactionReceipt({ hash });

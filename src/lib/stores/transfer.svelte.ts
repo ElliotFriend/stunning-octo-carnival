@@ -5,12 +5,17 @@ import {
     STELLAR,
     type Direction,
     type EvmChainId,
+    type InboundFlow,
     type OutboundFlow,
 } from '$lib/config';
 import { bridgeUsdcToEvm, depositForBurnToEvm, mintAndForward } from '$lib/stellar/cctp';
 import { approveUsdc, getUsdcAllowance, parseUsdcStellar } from '$lib/stellar/usdc';
 import { approveEvmUsdc, getEvmUsdcAllowance, parseEvmUsdc } from '$lib/evm/usdc';
-import { depositForBurnWithHookToStellar, receiveMessageOnEvm } from '$lib/evm/cctp';
+import {
+    bridgeWithPermitToStellar,
+    depositForBurnWithHookToStellar,
+    receiveMessageOnEvm,
+} from '$lib/evm/cctp';
 import { pollAttestation, type IrisMessage } from '$lib/circle/iris';
 import type { EvmWallet } from '$lib/evm/wallet';
 
@@ -33,6 +38,7 @@ export type TransferState = {
     direction: Direction;
     evmChainId: EvmChainId;
     outboundFlow: OutboundFlow;
+    inboundFlow: InboundFlow;
     phase: Phase;
     amount: string;
     steps: Step[];
@@ -44,13 +50,15 @@ const initialState = (
     direction: Direction,
     evmChainId: EvmChainId,
     outboundFlow: OutboundFlow,
+    inboundFlow: InboundFlow,
 ): TransferState => ({
     direction,
     evmChainId,
     outboundFlow,
+    inboundFlow,
     phase: 'idle',
     amount: '',
-    steps: stepsFor(direction, evmChainId, outboundFlow),
+    steps: stepsFor(direction, evmChainId, outboundFlow, inboundFlow),
     error: null,
     attestation: null,
 });
@@ -59,6 +67,7 @@ function stepsFor(
     direction: Direction,
     evmChainId: EvmChainId,
     outboundFlow: OutboundFlow,
+    inboundFlow: InboundFlow,
 ): Step[] {
     const evmLabel = EVM_CHAINS[evmChainId].label;
     if (direction === 'stellar-to-evm') {
@@ -80,6 +89,17 @@ function stepsFor(
             { key: 'mint', label: `Mint USDC on ${evmLabel}`, status: 'pending' },
         ];
     }
+    if (inboundFlow === 'wrapper') {
+        return [
+            {
+                key: 'burn',
+                label: `Permit + burn USDC on ${evmLabel} (one tx)`,
+                status: 'pending',
+            },
+            { key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
+            { key: 'mint', label: 'Mint USDC on Stellar (forwarder)', status: 'pending' },
+        ];
+    }
     return [
         { key: 'approve', label: `Approve USDC on ${evmLabel}`, status: 'pending' },
         { key: 'burn', label: `Burn USDC on ${evmLabel}`, status: 'pending' },
@@ -95,12 +115,20 @@ const evmTxUrl = (chainId: EvmChainId, hash: string) =>
 export function createTransferStore(
     initialDirection: Direction,
     initialEvmChain: EvmChainId,
-    initialFlow: OutboundFlow,
+    initialOutbound: OutboundFlow,
+    initialInbound: InboundFlow,
 ) {
-    let state = $state<TransferState>(initialState(initialDirection, initialEvmChain, initialFlow));
+    let state = $state<TransferState>(
+        initialState(initialDirection, initialEvmChain, initialOutbound, initialInbound),
+    );
 
     function reset() {
-        state = initialState(state.direction, state.evmChainId, state.outboundFlow);
+        state = initialState(
+            state.direction,
+            state.evmChainId,
+            state.outboundFlow,
+            state.inboundFlow,
+        );
     }
 
     function patchStep(key: Step['key'], patch: Partial<Step>) {
@@ -242,54 +270,77 @@ export function createTransferStore(
         stellarAddress: string;
         evmWallet: EvmWallet;
         evmChainId: EvmChainId;
+        inboundFlow: InboundFlow;
         amount: string;
     }) {
         state.amount = args.amount;
         const evmAmount = parseEvmUsdc(args.evmChainId, args.amount);
         const evmCfg = EVM_CHAINS[args.evmChainId];
 
-        const approved = await performStep('approving', 'approve', async () => {
-            const allowance = await getEvmUsdcAllowance(
-                args.evmChainId,
-                args.evmWallet.address,
-                EVM_CCTP_CONTRACTS.tokenMessengerV2,
-            );
-            if (allowance >= evmAmount) {
+        let burnHash: string;
+        if (args.inboundFlow === 'wrapper') {
+            // EIP-2612 permit + transferFrom + approve + depositForBurnWithHook
+            // bundled into one tx by the CctpWrapper. User signs a typed-data
+            // permit and then submits a single transaction — no separate approve.
+            const h = await performStep('burning', 'burn', async () => {
+                const hash = await bridgeWithPermitToStellar({
+                    chainId: args.evmChainId,
+                    wallet: args.evmWallet,
+                    amount: evmAmount,
+                    stellarRecipient: args.stellarAddress,
+                });
+                return {
+                    result: hash,
+                    patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) },
+                };
+            });
+            if (h === null) return;
+            burnHash = h;
+        } else {
+            const approved = await performStep('approving', 'approve', async () => {
+                const allowance = await getEvmUsdcAllowance(
+                    args.evmChainId,
+                    args.evmWallet.address,
+                    EVM_CCTP_CONTRACTS.tokenMessengerV2,
+                );
+                if (allowance >= evmAmount) {
+                    return {
+                        result: true,
+                        patch: { detail: 'sufficient allowance already set' },
+                    };
+                }
+                const hash = await approveEvmUsdc({
+                    chainId: args.evmChainId,
+                    wallet: args.evmWallet,
+                    spender: EVM_CCTP_CONTRACTS.tokenMessengerV2,
+                    amount: evmAmount,
+                });
                 return {
                     result: true,
-                    patch: { detail: 'sufficient allowance already set' },
+                    patch: {
+                        hash,
+                        hashUrl: evmTxUrl(args.evmChainId, hash),
+                        detail: 'allowance set',
+                    },
                 };
-            }
-            const hash = await approveEvmUsdc({
-                chainId: args.evmChainId,
-                wallet: args.evmWallet,
-                spender: EVM_CCTP_CONTRACTS.tokenMessengerV2,
-                amount: evmAmount,
             });
-            return {
-                result: true,
-                patch: {
-                    hash,
-                    hashUrl: evmTxUrl(args.evmChainId, hash),
-                    detail: 'allowance set',
-                },
-            };
-        });
-        if (approved === null) return;
+            if (approved === null) return;
 
-        const burnHash = await performStep('burning', 'burn', async () => {
-            const hash = await depositForBurnWithHookToStellar({
-                chainId: args.evmChainId,
-                wallet: args.evmWallet,
-                amount: evmAmount,
-                stellarRecipient: args.stellarAddress,
+            const h = await performStep('burning', 'burn', async () => {
+                const hash = await depositForBurnWithHookToStellar({
+                    chainId: args.evmChainId,
+                    wallet: args.evmWallet,
+                    amount: evmAmount,
+                    stellarRecipient: args.stellarAddress,
+                });
+                return {
+                    result: hash,
+                    patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) },
+                };
             });
-            return {
-                result: hash,
-                patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) },
-            };
-        });
-        if (burnHash === null) return;
+            if (h === null) return;
+            burnHash = h;
+        }
 
         const finalityNote = finalityHint(args.evmChainId);
         patchStep('attest', { detail: finalityNote });
@@ -328,12 +379,19 @@ export function createTransferStore(
         evmWallet: EvmWallet;
         evmChainId: EvmChainId;
         outboundFlow: OutboundFlow;
+        inboundFlow: InboundFlow;
         amount: string;
     }) {
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
         state.outboundFlow = args.outboundFlow;
-        state.steps = stepsFor(args.direction, args.evmChainId, args.outboundFlow);
+        state.inboundFlow = args.inboundFlow;
+        state.steps = stepsFor(
+            args.direction,
+            args.evmChainId,
+            args.outboundFlow,
+            args.inboundFlow,
+        );
         state.error = null;
         state.amount = '';
         state.attestation = null;
@@ -358,6 +416,7 @@ export function createTransferStore(
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
         state.outboundFlow = 'two-tx';
+        state.inboundFlow = 'two-tx';
         state.error = null;
         state.attestation = null;
         state.amount = '';
@@ -367,7 +426,7 @@ export function createTransferStore(
             ? stellarTxUrl(args.burnHash)
             : evmTxUrl(args.evmChainId, args.burnHash);
 
-        state.steps = stepsFor(args.direction, args.evmChainId, 'two-tx').map((s) => {
+        state.steps = stepsFor(args.direction, args.evmChainId, 'two-tx', 'two-tx').map((s) => {
             if (s.key === 'approve') {
                 return { ...s, status: 'done', detail: 'skipped (resumed)' };
             }
