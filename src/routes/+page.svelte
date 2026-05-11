@@ -6,10 +6,12 @@
     import TransferProgress from '$lib/components/TransferProgress.svelte';
     import HookDataPreview from '$lib/components/HookDataPreview.svelte';
     import StellarBurnPreview from '$lib/components/StellarBurnPreview.svelte';
+    import EvmBurnPreview from '$lib/components/EvmBurnPreview.svelte';
     import ResumeForm from '$lib/components/ResumeForm.svelte';
     import { createTransferStore } from '$lib/stores/transfer.svelte';
     import type { FreighterState } from '$lib/stellar/freighter';
     import type { EvmWallet } from '$lib/evm/wallet';
+    import type { SendCallsCapability } from '$lib/evm/capabilities';
     import {
         DEFAULT_EVM_CHAIN,
         DEFAULT_INBOUND_FLOW,
@@ -31,6 +33,7 @@
     let direction = $state<Direction>('stellar-to-evm');
     let outboundFlow = $state<OutboundFlow>(DEFAULT_OUTBOUND_FLOW);
     let inboundFlow = $state<InboundFlow>(DEFAULT_INBOUND_FLOW);
+    let sendCallsCap = $state<SendCallsCapability>({ supported: false, atomic: false });
     let amount = $state('');
 
     // Component instance handles, populated by `bind:this`. Used to imperatively
@@ -115,6 +118,7 @@
             bind:wallet={evm}
             bind:chainId={evmChainId}
             bind:inboundFlow
+            bind:sendCallsCap
             {direction}
             disabled={busy}
         />
@@ -134,7 +138,15 @@
         {#if !bothConnected}
             <p class="hint">Connect both wallets to enable transfers.</p>
         {/if}
-        {#if direction === 'evm-to-stellar' && stellar.address && transfer.state.phase === 'idle'}
+        {#if direction === 'evm-to-stellar' && stellar.address && evm && transfer.state.phase === 'idle'}
+            <EvmBurnPreview
+                evmAddress={evm.address}
+                {evmChainId}
+                stellarRecipient={stellar.address}
+                {amount}
+                {inboundFlow}
+                {sendCallsCap}
+            />
             <HookDataPreview stellarRecipient={stellar.address} />
         {/if}
         {#if direction === 'stellar-to-evm' && stellar.address && evm && transfer.state.phase === 'idle'}

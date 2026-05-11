@@ -18,12 +18,17 @@
         wallet = $bindable<EvmWallet | null>(null),
         chainId = $bindable<EvmChainId>('arc'),
         inboundFlow = $bindable<InboundFlow>('two-tx'),
+        // EIP-5792 capability for (wallet, chainId). Owned by the parent so
+        // EvmBurnPreview can read it too; refreshed here on connect / chain
+        // switch via explicit dataflow.
+        sendCallsCap = $bindable<SendCallsCapability>({ supported: false, atomic: false }),
         direction,
         disabled = false,
     }: {
         wallet?: EvmWallet | null;
         chainId?: EvmChainId;
         inboundFlow?: InboundFlow;
+        sendCallsCap?: SendCallsCapability;
         direction: Direction;
         disabled?: boolean;
     } = $props();
@@ -33,9 +38,6 @@
     let connecting = $state(false);
     let connectError = $state<string | null>(null);
     let pickerProviders = $state<EvmProviderInfo[] | null>(null);
-    // EIP-5792 capability for (wallet, chainId). Refreshed via explicit
-    // dataflow on connect / chain-switch (no $effect).
-    let sendCallsCap = $state<SendCallsCapability>({ supported: false, atomic: false });
 
     let selectedCfg = $derived(EVM_CHAINS[chainId]);
     let onCorrectChain = $derived(!!wallet && wallet.chainId === selectedCfg.chain.id);

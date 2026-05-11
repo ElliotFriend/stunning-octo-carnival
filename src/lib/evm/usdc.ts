@@ -82,6 +82,31 @@ export type EvmUsdcPermitSignature = {
     s: Hex;
 };
 
+// The four fields that go into the EIP-712 domain when signing a `Permit`
+// message. `name` and `version` come from the USDC contract itself (they
+// vary by deployment — typically "USDC"/"2" but worth reading rather than
+// guessing); `chainId` and `verifyingContract` are static per chain.
+export type EvmUsdcEip712Domain = {
+    name: string;
+    version: string;
+    chainId: number;
+    verifyingContract: `0x${string}`;
+};
+
+// Reads USDC's `name()` and `version()` at runtime. Both values are
+// effectively immutable for a deployed FiatToken proxy, but we query
+// them rather than hardcode — a mismatched name/version produces the
+// notoriously opaque "EIP2612: invalid signature" revert.
+export async function fetchUsdcEip712Domain(chainId: EvmChainId): Promise<EvmUsdcEip712Domain> {
+    const cfg = EVM_CHAINS[chainId];
+    const pub = getPublicClient(chainId);
+    const [name, version] = await Promise.all([
+        pub.readContract({ address: cfg.usdc, abi: usdcPermitAbi, functionName: 'name' }),
+        pub.readContract({ address: cfg.usdc, abi: usdcPermitAbi, functionName: 'version' }),
+    ]);
+    return { name, version, chainId: cfg.chain.id, verifyingContract: cfg.usdc };
+}
+
 // Produces an EIP-2612 permit signature authorizing `spender` to pull `value`
 // USDC from `wallet.address`. The signature is single-use (consumes a nonce)
 // and expires at `deadline`. No on-chain tx is sent — the wrapper contract
@@ -96,9 +121,8 @@ export async function signEvmUsdcPermit(args: {
     const cfg = EVM_CHAINS[args.chainId];
     const pub = getPublicClient(args.chainId);
 
-    const [name, version, nonce] = await Promise.all([
-        pub.readContract({ address: cfg.usdc, abi: usdcPermitAbi, functionName: 'name' }),
-        pub.readContract({ address: cfg.usdc, abi: usdcPermitAbi, functionName: 'version' }),
+    const [domain, nonce] = await Promise.all([
+        fetchUsdcEip712Domain(args.chainId),
         pub.readContract({
             address: cfg.usdc,
             abi: usdcPermitAbi,
@@ -111,12 +135,7 @@ export async function signEvmUsdcPermit(args: {
 
     const signature = (await args.wallet.walletClient.signTypedData({
         account: args.wallet.address,
-        domain: {
-            name,
-            version,
-            chainId: cfg.chain.id,
-            verifyingContract: cfg.usdc,
-        },
+        domain,
         types: {
             Permit: [
                 { name: 'owner', type: 'address' },
