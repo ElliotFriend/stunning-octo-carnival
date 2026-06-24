@@ -134,6 +134,7 @@
             {direction}
             {evmLabel}
             bind:amount
+            bind:speed
             disabled={busy}
             {busy}
             {canSubmit}
@@ -153,6 +154,7 @@
                 {amount}
                 {inboundFlow}
                 {sendCallsCap}
+                {speed}
             />
             <HookDataPreview stellarRecipient={stellar.address} />
         {/if}
@@ -163,6 +165,7 @@
                 {evmChainId}
                 {amount}
                 {outboundFlow}
+                {speed}
             />
         {/if}
     </section>

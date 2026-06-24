@@ -101,9 +101,6 @@ export const IRIS_API = 'https://iris-api-sandbox.circle.com';
 //                     (basis points of the amount) bounded by max_fee.
 export const STANDARD_THRESHOLD = 2000;
 export const FAST_THRESHOLD = 1000;
-// Temporary alias kept so existing importers compile until the UI task
-// switches them to the speed-aware path. Removed in Task 3.
-export const FINALIZED_THRESHOLD = STANDARD_THRESHOLD;
 
 export type TransferSpeed = 'standard' | 'fast';
 export const DEFAULT_SPEED: TransferSpeed = 'standard';

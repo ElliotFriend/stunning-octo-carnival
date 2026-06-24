@@ -1,10 +1,11 @@
 <script lang="ts">
-    import type { Direction } from '$lib/config';
+    import type { Direction, TransferSpeed } from '$lib/config';
 
     let {
         direction,
         evmLabel = 'EVM',
         amount = $bindable<string>(''),
+        speed = $bindable<TransferSpeed>('standard'),
         disabled = false,
         busy = false,
         canSubmit,
@@ -13,6 +14,7 @@
         direction: Direction;
         evmLabel?: string;
         amount?: string;
+        speed?: TransferSpeed;
         disabled?: boolean;
         busy?: boolean;
         canSubmit: boolean;
@@ -32,6 +34,12 @@
               ? `Send Stellar → ${evmShort}`
               : `Send ${evmShort} → Stellar`,
     );
+
+    let etaCaption = $derived(
+        speed === 'fast'
+            ? 'Fast: mint before finality — Circle charges a basis-point fee.'
+            : 'Standard: wait for source-chain finality — no fee.',
+    );
 </script>
 
 <form class="form" onsubmit={handle}>
@@ -48,6 +56,38 @@
         />
         <span class="symbol">USDC</span>
     </label>
+
+    <div class="speed-picker" role="tablist" aria-label="Transfer speed">
+        <span class="speed-label">Speed</span>
+        <div class="speed-buttons">
+            <button
+                type="button"
+                class="chip"
+                class:active={speed === 'standard'}
+                {disabled}
+                onclick={() => (speed = 'standard')}
+                role="tab"
+                aria-selected={speed === 'standard'}
+                title="Wait for source-chain finality — no fee"
+            >
+                Standard
+            </button>
+            <button
+                type="button"
+                class="chip"
+                class:active={speed === 'fast'}
+                {disabled}
+                onclick={() => (speed = 'fast')}
+                role="tab"
+                aria-selected={speed === 'fast'}
+                title="Mint before finality — Circle charges a basis-point fee"
+            >
+                Fast
+            </button>
+        </div>
+        <span class="speed-eta">{etaCaption}</span>
+    </div>
+
     <button type="submit" class="submit" disabled={!canSubmit || busy}>
         {buttonLabel}
     </button>
@@ -119,5 +159,54 @@
     .submit:disabled {
         background: var(--bg-elev-2);
         color: var(--text-dim);
+    }
+
+    .speed-picker {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .speed-label {
+        font-size: 0.7rem;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .speed-buttons {
+        display: flex;
+        gap: 0.4rem;
+    }
+
+    .chip {
+        flex: 1;
+        background: var(--bg-elev-2);
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        padding: 0.4rem 0.6rem;
+        border-radius: var(--radius);
+        font-size: 0.78rem;
+        font-weight: 500;
+        transition: all 120ms;
+    }
+
+    .chip:hover:not(:disabled) {
+        color: var(--text);
+        border-color: var(--border-strong);
+    }
+
+    .chip.active {
+        background: var(--accent-dim);
+        color: var(--text);
+        border-color: var(--accent);
+    }
+
+    .speed-eta {
+        font-size: 0.72rem;
+        color: var(--text-dim);
+        line-height: 1.4;
     }
 </style>
