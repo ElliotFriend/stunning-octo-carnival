@@ -98,6 +98,73 @@ export async function bridgeUsdcToEvm(args: {
     return { hash, sourceDomain: STELLAR.domain };
 }
 
+// ─────────────────────────────────────────────────────────────────────
+//  EXPERIMENTAL — Circle Crosschain Forwarding Service trigger (outbound)
+// ─────────────────────────────────────────────────────────────────────
+// Same as depositForBurnToEvm, but calls deposit_for_burn_with_hook with the
+// Circle forwarding-service magic hookData. Circle's hosted relayer watches
+// source chains for this magic and auto-completes the destination mint,
+// deducting its fee from the minted USDC — so the user pays no destination gas.
+//
+// hookData layout (Circle docs):
+//   bytes 0–23 : 24-byte magic, ascii "cctp-forward" left-aligned, zero-padded
+//   bytes 24–27: u32 version (0)
+//   bytes 28–31: u32 length of additional Circle hook data (0 — none here)
+//
+// Stellar is NOT a documented forwarder source; this probes whether the relayer
+// picks it up regardless. destination_caller is left ZERO (permissionless) so if
+// the relayer ignores the burn, the mint can still be completed manually via
+// receiveMessage (the demo's resume flow) — funds are never stranded.
+const CCTP_FORWARD_MAGIC = 'cctp-forward';
+
+function encodeCctpForwardHookData(): Uint8Array {
+    // 32 bytes total: 24 magic + u32 version + u32 length, all-zero tail. Writing
+    // the ascii magic at offset 0 leaves the magic padding, version, and length
+    // fields at their zero defaults — exactly the documented "no extra data" form.
+    const out = new Uint8Array(32);
+    out.set(new TextEncoder().encode(CCTP_FORWARD_MAGIC), 0);
+    return out;
+}
+
+export async function depositForBurnWithHookForwarded(args: {
+    caller: string;
+    amount: bigint; // Stellar 7-decimal subunits
+    destinationDomain: number;
+    evmRecipient: `0x${string}`;
+    maxFee: bigint;
+    finalityThreshold: number;
+}): Promise<{ hash: string; sourceDomain: number }> {
+    const account = await stellarRpc.getAccount(args.caller);
+
+    const mintRecipient = leftPad32FromHex(args.evmRecipient);
+    const destinationCaller = ZERO_BYTES_32;
+    const hookData = encodeCctpForwardHookData();
+
+    const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: STELLAR.networkPassphrase,
+    })
+        .addOperation(
+            tmm.call(
+                'deposit_for_burn_with_hook',
+                Address.fromString(args.caller).toScVal(),
+                nativeToScVal(args.amount, { type: 'i128' }),
+                nativeToScVal(args.destinationDomain, { type: 'u32' }),
+                bytesN32(mintRecipient),
+                Address.fromString(STELLAR.contracts.usdc).toScVal(),
+                bytesN32(destinationCaller),
+                nativeToScVal(args.maxFee, { type: 'i128' }),
+                nativeToScVal(args.finalityThreshold, { type: 'u32' }),
+                nativeToScVal(Buffer.from(hookData), { type: 'bytes' }),
+            ),
+        )
+        .setTimeout(60)
+        .build();
+
+    const hash = await simulateSignAndSubmit(tx);
+    return { hash, sourceDomain: STELLAR.domain };
+}
+
 // Inbound from EVM: mint_and_forward is permissionless (no caller arg).
 // The user pays the Soroban fee but doesn't need to be the recipient.
 export async function mintAndForward(args: {

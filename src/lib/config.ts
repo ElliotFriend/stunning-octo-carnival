@@ -126,8 +126,14 @@ export type Direction = 'stellar-to-evm' | 'evm-to-stellar';
 //                 approve + deposit_for_burn under one Freighter prompt)
 //  - 'two-tx'   : separate `approve` and `deposit_for_burn` invocations,
 //                 same as plain CCTP without the wrapper
-// Mostly here so the demo can show both flows side-by-side.
-export type OutboundFlow = 'wrapper' | 'two-tx';
+//  - 'forwarder': EXPERIMENTAL — deposit_for_burn_with_hook carrying the Circle
+//                 Crosschain Forwarding Service magic hookData, to probe whether
+//                 Circle's hosted relayer auto-mints on the EVM destination for a
+//                 Stellar-origin burn (Stellar is not a documented forwarder
+//                 source; destination_caller stays zero so a manual mint can
+//                 still recover the funds if the relayer ignores it).
+// Mostly here so the demo can show the flows side-by-side.
+export type OutboundFlow = 'wrapper' | 'two-tx' | 'forwarder';
 // Default to the plain CCTP path so the demo opens on the typical
 // `approve` → `deposit_for_burn` experience. Users can flip to the
 // wrapper-contract flow from the StellarPanel toggle.

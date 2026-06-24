@@ -117,6 +117,18 @@
                 >
                     1 tx (wrapper)
                 </button>
+                <button
+                    type="button"
+                    class="chip"
+                    class:active={outboundFlow === 'forwarder'}
+                    {disabled}
+                    onclick={() => (outboundFlow = 'forwarder')}
+                    role="tab"
+                    aria-selected={outboundFlow === 'forwarder'}
+                    title="EXPERIMENTAL: burn with Circle forwarding hookData and watch for the relayer to auto-mint on the EVM side"
+                >
+                    forwarder ⚗︎
+                </button>
             </div>
         </div>
     {/if}

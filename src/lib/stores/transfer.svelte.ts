@@ -11,10 +11,28 @@ import {
     type OutboundFlow,
     type TransferSpeed,
 } from '$lib/config';
-import { fetchBurnFee, feeBpsFor, thresholdFor, computeMaxFee } from '$lib/circle/fees';
-import { bridgeUsdcToEvm, depositForBurnToEvm, mintAndForward } from '$lib/stellar/cctp';
+import {
+    fetchBurnFee,
+    feeBpsFor,
+    thresholdFor,
+    computeMaxFee,
+    fetchForwardFee,
+    forwardedMaxFeeStellar,
+} from '$lib/circle/fees';
+import {
+    bridgeUsdcToEvm,
+    depositForBurnToEvm,
+    depositForBurnWithHookForwarded,
+    mintAndForward,
+} from '$lib/stellar/cctp';
 import { approveUsdc, getUsdcAllowance, parseUsdcStellar } from '$lib/stellar/usdc';
-import { approveEvmUsdc, getEvmUsdcAllowance, parseEvmUsdc } from '$lib/evm/usdc';
+import {
+    approveEvmUsdc,
+    getEvmUsdcAllowance,
+    getEvmUsdcBalance,
+    parseEvmUsdc,
+} from '$lib/evm/usdc';
+import { sleep } from '$lib/utils';
 import {
     bridgeWithPermitToStellar,
     depositForBurnWithHookToStellar,
@@ -76,6 +94,22 @@ function stepsFor(
 ): Step[] {
     const evmLabel = EVM_CHAINS[evmChainId].label;
     if (direction === 'stellar-to-evm') {
+        if (outboundFlow === 'forwarder') {
+            return [
+                { key: 'approve', label: 'Approve TokenMessenger on Stellar', status: 'pending' },
+                {
+                    key: 'burn',
+                    label: 'Burn USDC on Stellar (forwarder hook)',
+                    status: 'pending',
+                },
+                { key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
+                {
+                    key: 'mint',
+                    label: `Await Circle relayer mint on ${evmLabel}`,
+                    status: 'pending',
+                },
+            ];
+        }
         if (outboundFlow === 'wrapper') {
             return [
                 {
@@ -192,6 +226,15 @@ export function createTransferStore(
         const stellarAmount = parseUsdcStellar(args.amount);
         const evmCfg = EVM_CHAINS[args.evmChainId];
 
+        // EXPERIMENTAL forwarder path — approve, burn with the Circle forwarding
+        // hookData, then *observe* whether Circle's relayer mints on the EVM side
+        // (no user receiveMessage). Isolated as an early return to keep the
+        // standard wrapper/two-tx flow untouched.
+        if (args.outboundFlow === 'forwarder') {
+            await runStellarToEvmForwarded(args, stellarAmount, evmCfg);
+            return;
+        }
+
         // Fetches burn-fee params. Called as the first line inside each burn
         // performStep so any network/parse failure is caught by performStep → fail().
         async function burnParams() {
@@ -299,6 +342,110 @@ export function createTransferStore(
             };
         });
         if (mintHash === null) return;
+
+        state.phase = 'done';
+    }
+
+    // EXPERIMENTAL — Stellar→EVM burn that triggers Circle's Crosschain
+    // Forwarding Service via hookData, then observes whether the relayer mints
+    // on the EVM destination without the user submitting receiveMessage.
+    async function runStellarToEvmForwarded(
+        args: {
+            stellarAddress: string;
+            evmWallet: EvmWallet;
+            evmChainId: EvmChainId;
+            speed: TransferSpeed;
+        },
+        stellarAmount: bigint,
+        evmCfg: (typeof EVM_CHAINS)[EvmChainId],
+    ) {
+        const approved = await performStep('approving', 'approve', async () => {
+            const existing = await getUsdcAllowance({
+                from: args.stellarAddress,
+                spender: STELLAR.contracts.tokenMessengerMinter,
+            });
+            if (existing >= stellarAmount) {
+                return { result: true, patch: { detail: 'sufficient allowance already set' } };
+            }
+            const hash = await approveUsdc({
+                from: args.stellarAddress,
+                spender: STELLAR.contracts.tokenMessengerMinter,
+                amount: stellarAmount,
+            });
+            return {
+                result: true,
+                patch: { hash, hashUrl: stellarTxUrl(hash), detail: 'allowance set' },
+            };
+        });
+        if (approved === null) return;
+
+        // Recipient balance before the burn — the observe step watches for an
+        // increase to detect a relayer-completed mint.
+        let baseline: bigint;
+        try {
+            baseline = await getEvmUsdcBalance(args.evmChainId, args.evmWallet.address);
+        } catch (err) {
+            fail(errMsg(err));
+            return;
+        }
+
+        const burnHash = await performStep('burning', 'burn', async () => {
+            const rows = await fetchForwardFee(STELLAR.domain, evmCfg.domain);
+            const maxFee = forwardedMaxFeeStellar(rows, args.speed, STELLAR_MAX_FEE);
+            const r = await depositForBurnWithHookForwarded({
+                caller: args.stellarAddress,
+                amount: stellarAmount,
+                destinationDomain: evmCfg.domain,
+                evmRecipient: args.evmWallet.address,
+                maxFee,
+                finalityThreshold: thresholdFor(args.speed),
+            });
+            return {
+                result: r.hash,
+                patch: {
+                    hash: r.hash,
+                    hashUrl: stellarTxUrl(r.hash),
+                    detail: `forwarder hook · maxFee ${maxFee}`,
+                },
+            };
+        });
+        if (burnHash === null) return;
+
+        const attest = await performStep<IrisMessage>('attesting', 'attest', async () => {
+            const r = await pollAttestation(STELLAR.domain, burnHash, {
+                onProgress: ({ elapsedMs, status }) => {
+                    patchStep('attest', { detail: `${Math.round(elapsedMs / 1000)}s · ${status}` });
+                },
+            });
+            return { result: r, patch: { detail: 'attested' } };
+        });
+        if (attest === null) return;
+        state.attestation = attest;
+
+        // OBSERVE: poll the recipient balance for a relayer-completed mint. If it
+        // never lands, the burn is still attested and recoverable via the resume
+        // flow (manual receiveMessage) — destination_caller was left zero.
+        const minted = await performStep('minting', 'mint', async () => {
+            const start = Date.now();
+            const timeout = 3 * 60_000;
+            while (Date.now() - start < timeout) {
+                const bal = await getEvmUsdcBalance(args.evmChainId, args.evmWallet.address);
+                if (bal > baseline) {
+                    return {
+                        result: bal,
+                        patch: { detail: `relayer minted +${bal - baseline} (no user tx)` },
+                    };
+                }
+                patchStep('mint', {
+                    detail: `awaiting Circle relayer… ${Math.round((Date.now() - start) / 1000)}s`,
+                });
+                await sleep(5_000);
+            }
+            throw new Error(
+                'Circle relayer did not mint within 3 min — burn is attested and funds are recoverable: use the resume flow with the burn hash to mint manually.',
+            );
+        });
+        if (minted === null) return;
 
         state.phase = 'done';
     }
