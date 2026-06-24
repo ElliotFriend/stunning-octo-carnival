@@ -74,18 +74,27 @@ export function fetchForwardFee(srcDomain: number, dstDomain: number): Promise<F
     return p;
 }
 
-// maxFee bound for a forwarder-triggered Stellar burn. `forwardFee.high` is in
-// 6-dp CCTP units; the Stellar burn-token max_fee is 7-dp, so scale by 10 and
-// pad with `floor`. maxFee is a CAP (only feeExecuted <= maxFee is charged), so
-// deliberately over-provisioning is safe — we do, because the source-token
-// denomination of forwardFee for a Stellar origin is unverified.
+// Small fixed cushion (7-dp Stellar subunits, ~$0.001) over the quoted fee, to
+// absorb a quote tick between fetch and submit without meaningfully overpaying.
+const STELLAR_FORWARD_MARGIN = 10_000n;
+
+// maxFee bound for a forwarder-triggered Stellar burn. maxFee must cover the
+// protocol fee (bps of the amount) PLUS the forwarding service fee, mirroring
+// the EVM depositForBurnWithHook path. Two unit notes:
+//   - the protocol fee is bps of `amount`, already in 7-dp Stellar subunits;
+//   - `forwardFee.high` is canonical 6-dp, so ×10 to reach the 7-dp burn-token
+//     scale. (This ×10 is a unit conversion, NOT padding — dropping it underpays
+//     10× and reverts with InsufficientMaxFee.)
+// Empirically the forwarder consumes ~the full maxFee (feeExecuted ≈ maxFee), so
+// we size to the quote with only STELLAR_FORWARD_MARGIN of slack — no large floor.
 export function forwardedMaxFeeStellar(
     rows: ForwardFeeRow[],
     speed: TransferSpeed,
-    floor: bigint,
+    amount: bigint,
 ): bigint {
     const threshold = thresholdFor(speed);
     const row = rows.find((r) => r.finalityThreshold === threshold) ?? rows[0];
-    const high = row?.forwardFee?.high ?? 0;
-    return BigInt(Math.ceil(high)) * 10n + floor;
+    const protocol = BigInt(Math.ceil((Number(amount) * (row?.minimumFee ?? 0)) / 10000));
+    const forward7dp = BigInt(Math.ceil(row?.forwardFee?.high ?? 0)) * 10n;
+    return protocol + forward7dp + STELLAR_FORWARD_MARGIN;
 }

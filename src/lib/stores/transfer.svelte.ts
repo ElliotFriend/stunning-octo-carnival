@@ -391,7 +391,7 @@ export function createTransferStore(
 
         const burnHash = await performStep('burning', 'burn', async () => {
             const rows = await fetchForwardFee(STELLAR.domain, evmCfg.domain);
-            const maxFee = forwardedMaxFeeStellar(rows, args.speed, STELLAR_MAX_FEE);
+            const maxFee = forwardedMaxFeeStellar(rows, args.speed, stellarAmount);
             const r = await depositForBurnWithHookForwarded({
                 caller: args.stellarAddress,
                 amount: stellarAmount,
