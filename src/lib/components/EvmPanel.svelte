@@ -323,6 +323,11 @@
         color: #94b8ff;
     }
 
+    .badge.ethereum {
+        background: color-mix(in srgb, #627eea 24%, transparent);
+        color: #aab6f5;
+    }
+
     .muted {
         color: var(--text-dim);
         font-size: 0.85rem;
