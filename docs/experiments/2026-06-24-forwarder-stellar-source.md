@@ -72,9 +72,41 @@ forwarding by _destination_.
 3. **Stellar→EVM forwarder support is the only viable direction** to retry:
    EVM→Stellar is hard-blocked ("destination does not support forwarding").
 
-## Next step (separate, cleanly cherry-pickable)
+## Second trial: Stellar→Ethereum Sepolia — also NOT forwarded
 
-Add Ethereum Sepolia as a normal EVM destination so a last-ditch
-Stellar→Ethereum-Sepolia forwarder trial can run. The chain addition is a
-general-purpose change kept in its own commit so it can be cherry-picked back
-onto `main` independently of this experiment.
+Added Ethereum Sepolia (domain 0) as a destination and re-ran the forwarder
+flow. Same outcome, decoded from the burn message (Stellar 27 → Ethereum 0):
+
+- `hookData` = `cctp-forward`, `destinationCaller` = 0, recipient =
+  TokenMessengerV2 — all correct.
+- amount = 2,000,000 ($2.00); `maxFee` = 1,445,108 (6-dp norm, ~$1.445) —
+  ample for the ~$1.45 Ethereum forward fee.
+- `feeExecuted` = **0** — relayer did not process it.
+- `finalityThresholdExecuted` = 2000 despite `minFinalityThreshold` = 1000 —
+  Stellar source attested as finalized, not Fast (consistent with the Base run).
+- Raw attestation = two concatenated 65-byte attester signatures (valid), so the
+  message is mintable; the burn is recoverable via manual `receiveMessage`
+  (resume flow with Ethereum selected).
+
+So Stellar-source forwarding fails identically against **both** supported
+destinations (Base and Ethereum Sepolia). Combined with the EVM↔EVM control
+succeeding, this isolates the cause to Circle's relayer not watching a **Stellar
+source** — not a destination, fee, threshold, caller, or encoding issue on our
+side.
+
+## Conclusion
+
+- Our forwarding implementation is correct (proven by the EVM↔EVM control).
+- Stellar-origin forwarding is unsupported by Circle's relayer on sandbox as of
+  2026-06-24, across all tested destinations. The fee API quoting the route and
+  the docs gating only by destination are both misleading — the relayer simply
+  doesn't act on a Stellar source.
+- Also observed: Stellar-source burns do not honor Fast (always attest at
+  finalized / threshold 2000), independent of forwarding.
+- Forwarder economics: `feeExecuted` ≈ full `maxFee`; forward fee tracks
+  destination gas (~$0.20 Base, ~$1.45 Ethereum) — size `maxFee` tightly.
+
+Worth reporting to Circle: confirm whether/when Stellar-source forwarding (and
+Stellar-source Fast) will be enabled. Parked until then. The Ethereum Sepolia
+chain addition is a separate, general-purpose commit (cherry-pickable onto
+`main`).
