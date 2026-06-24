@@ -3,11 +3,15 @@ import {
     EVM_CCTP_CONTRACTS,
     EVM_CHAINS,
     STELLAR,
+    STELLAR_MAX_FEE,
+    EVM_MAX_FEE,
     type Direction,
     type EvmChainId,
     type InboundFlow,
     type OutboundFlow,
+    type TransferSpeed,
 } from '$lib/config';
+import { fetchBurnFee, feeBpsFor, thresholdFor, computeMaxFee } from '$lib/circle/fees';
 import { bridgeUsdcToEvm, depositForBurnToEvm, mintAndForward } from '$lib/stellar/cctp';
 import { approveUsdc, getUsdcAllowance, parseUsdcStellar } from '$lib/stellar/usdc';
 import { approveEvmUsdc, getEvmUsdcAllowance, parseEvmUsdc } from '$lib/evm/usdc';
@@ -182,10 +186,18 @@ export function createTransferStore(
         evmChainId: EvmChainId;
         outboundFlow: OutboundFlow;
         amount: string;
+        speed: TransferSpeed;
     }) {
         state.amount = args.amount;
         const stellarAmount = parseUsdcStellar(args.amount);
         const evmCfg = EVM_CHAINS[args.evmChainId];
+        const feeRows = await fetchBurnFee(STELLAR.domain, evmCfg.domain);
+        const maxFee = computeMaxFee(
+            stellarAmount,
+            feeBpsFor(feeRows, args.speed),
+            STELLAR_MAX_FEE,
+        );
+        const finalityThreshold = thresholdFor(args.speed);
 
         let burnHash: string;
         if (args.outboundFlow === 'wrapper') {
@@ -198,6 +210,8 @@ export function createTransferStore(
                     amount: stellarAmount,
                     destinationDomain: evmCfg.domain,
                     evmRecipient: args.evmWallet.address,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: r.hash,
@@ -238,6 +252,8 @@ export function createTransferStore(
                     amount: stellarAmount,
                     destinationDomain: evmCfg.domain,
                     evmRecipient: args.evmWallet.address,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: r.hash,
@@ -284,10 +300,14 @@ export function createTransferStore(
         evmChainId: EvmChainId;
         inboundFlow: InboundFlow;
         amount: string;
+        speed: TransferSpeed;
     }) {
         state.amount = args.amount;
         const evmAmount = parseEvmUsdc(args.evmChainId, args.amount);
         const evmCfg = EVM_CHAINS[args.evmChainId];
+        const feeRows = await fetchBurnFee(evmCfg.domain, STELLAR.domain);
+        const maxFee = computeMaxFee(evmAmount, feeBpsFor(feeRows, args.speed), EVM_MAX_FEE);
+        const finalityThreshold = thresholdFor(args.speed);
 
         let burnHash: string;
         if (args.inboundFlow === 'wrapper') {
@@ -300,6 +320,8 @@ export function createTransferStore(
                     wallet: args.evmWallet,
                     amount: evmAmount,
                     stellarRecipient: args.stellarAddress,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: hash,
@@ -319,6 +341,8 @@ export function createTransferStore(
                     wallet: args.evmWallet,
                     amount: evmAmount,
                     stellarRecipient: args.stellarAddress,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: hash,
@@ -363,6 +387,8 @@ export function createTransferStore(
                     wallet: args.evmWallet,
                     amount: evmAmount,
                     stellarRecipient: args.stellarAddress,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: hash,
@@ -412,6 +438,7 @@ export function createTransferStore(
         outboundFlow: OutboundFlow;
         inboundFlow: InboundFlow;
         amount: string;
+        speed: TransferSpeed;
     }) {
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
