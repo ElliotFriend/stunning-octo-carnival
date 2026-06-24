@@ -1,6 +1,6 @@
 import { Networks } from '@stellar/stellar-sdk';
 import { defineChain } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { baseSepolia, sepolia } from 'viem/chains';
 
 export const STELLAR = {
     networkPassphrase: Networks.TESTNET,
@@ -43,9 +43,9 @@ export const arcTestnet = defineChain({
 });
 
 export type EvmChainConfig = {
-    id: 'arc' | 'base';
+    id: 'arc' | 'base' | 'ethereum';
     label: string;
-    chain: ReturnType<typeof defineChain> | typeof baseSepolia;
+    chain: ReturnType<typeof defineChain> | typeof baseSepolia | typeof sepolia;
     domain: number;
     explorer: string;
     usdc: `0x${string}`;
@@ -63,7 +63,7 @@ export type EvmChainConfig = {
     bridgeWrapper?: `0x${string}`;
 };
 
-export const EVM_CHAINS: Record<'arc' | 'base', EvmChainConfig> = {
+export const EVM_CHAINS: Record<'arc' | 'base' | 'ethereum', EvmChainConfig> = {
     arc: {
         id: 'arc',
         label: 'Arc Testnet',
@@ -86,6 +86,20 @@ export const EVM_CHAINS: Record<'arc' | 'base', EvmChainConfig> = {
         gasNote: 'Gas paid in ETH.',
         attestationEtaMs: 15 * 60_000,
         bridgeWrapper: '0xe87b2FCD2675f49785B46f5e84E1019961637eBd', // deployed from contracts/evm/cctp-wrapper
+    },
+    ethereum: {
+        id: 'ethereum',
+        label: 'Ethereum Sepolia',
+        chain: sepolia,
+        domain: 0,
+        explorer: 'https://sepolia.etherscan.io',
+        usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+        usdcDecimals: 6,
+        gasNote: 'Gas paid in ETH.',
+        // Ethereum L1 finality is the slowest of the demo chains for a Standard
+        // (finalized) transfer. No CctpWrapper deployed here, so the EVM→Stellar
+        // permit / send-calls flows fall back to two-tx on this chain.
+        attestationEtaMs: 19 * 60_000,
     },
 };
 
