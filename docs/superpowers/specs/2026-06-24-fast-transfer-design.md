@@ -16,12 +16,12 @@ Standard/Fast toggle. Fast Transfer requires two things on the burn:
 Confirmed against Circle's sandbox fee API (`/v2/burn/USDC/fees/{src}/{dst}`)
 on 2026-06-24:
 
-| Route | Fast (threshold 1000) | Standard (2000) |
-|---|---|---|
-| Stellar→Base (27→6) | 0 bps | 0 |
-| Stellar→Arc (27→26) | 0 bps | 0 |
-| Base→Stellar (6→27) | **1.3 bps** | 0 |
-| Arc→Stellar (26→27) | 0 bps | 0 |
+| Route               | Fast (threshold 1000) | Standard (2000) |
+| ------------------- | --------------------- | --------------- |
+| Stellar→Base (27→6) | 0 bps                 | 0               |
+| Stellar→Arc (27→26) | 0 bps                 | 0               |
+| Base→Stellar (6→27) | **1.3 bps**           | 0               |
+| Arc→Stellar (26→27) | 0 bps                 | 0               |
 
 So Fast from Stellar is free on testnet; Base→Stellar Fast charges 1.3 bps —
 the case that proves the hardcoded `EVM_MAX_FEE=500` (~$0.0005) would revert
@@ -83,7 +83,7 @@ from the caller (the runner computes them).
 - `start()` and both runners gain `speed: TransferSpeed`.
 - Inside the burn step, before calling the burn fn: fetch the route fee rows
   (cached), `bps = feeBpsFor(rows, speed)`, `maxFee = computeMaxFee(amount, bps,
-  floor)`, `threshold = thresholdFor(speed)`. Floor = `STELLAR_MAX_FEE` for the
+floor)`, `threshold = thresholdFor(speed)`. Floor = `STELLAR_MAX_FEE` for the
   Stellar source, `EVM_MAX_FEE` for the EVM source. Pass both into the burn fn.
 - A fee-fetch failure surfaces through the existing `performStep` error funnel.
 - `resume()` is unchanged — it skips the burn, so speed is irrelevant there.

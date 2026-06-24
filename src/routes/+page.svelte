@@ -16,11 +16,13 @@
         DEFAULT_EVM_CHAIN,
         DEFAULT_INBOUND_FLOW,
         DEFAULT_OUTBOUND_FLOW,
+        DEFAULT_SPEED,
         EVM_CHAINS,
         type Direction,
         type EvmChainId,
         type InboundFlow,
         type OutboundFlow,
+        type TransferSpeed,
     } from '$lib/config';
 
     let stellar = $state<FreighterState>({
@@ -35,6 +37,7 @@
     let inboundFlow = $state<InboundFlow>(DEFAULT_INBOUND_FLOW);
     let sendCallsCap = $state<SendCallsCapability>({ supported: false, atomic: false });
     let amount = $state('');
+    let speed = $state<TransferSpeed>(DEFAULT_SPEED);
 
     // Component instance handles, populated by `bind:this`. Used to imperatively
     // refresh each panel's balance after a successful transfer.
@@ -68,6 +71,7 @@
             outboundFlow,
             inboundFlow,
             amount: amount.trim(),
+            speed,
         });
         // Skip refetch on error — the burn may not have landed, and a failed RPC
         // call here would clobber the error state shown to the user.
@@ -130,6 +134,7 @@
             {direction}
             {evmLabel}
             bind:amount
+            bind:speed
             disabled={busy}
             {busy}
             {canSubmit}
@@ -149,6 +154,7 @@
                 {amount}
                 {inboundFlow}
                 {sendCallsCap}
+                {speed}
             />
             <HookDataPreview stellarRecipient={stellar.address} />
         {/if}
@@ -159,6 +165,7 @@
                 {evmChainId}
                 {amount}
                 {outboundFlow}
+                {speed}
             />
         {/if}
     </section>

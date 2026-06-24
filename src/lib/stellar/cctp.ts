@@ -7,7 +7,7 @@ import {
     xdr,
 } from '@stellar/stellar-sdk';
 import { Buffer } from 'buffer';
-import { STELLAR, FINALIZED_THRESHOLD, STELLAR_MAX_FEE } from '$lib/config';
+import { STELLAR } from '$lib/config';
 import { stellarRpc } from './client';
 import { simulateSignAndSubmit } from './tx';
 
@@ -23,6 +23,8 @@ export async function depositForBurnToEvm(args: {
     amount: bigint; // Stellar 7-decimal subunits
     destinationDomain: number;
     evmRecipient: `0x${string}`;
+    maxFee: bigint;
+    finalityThreshold: number;
 }): Promise<{ hash: string; sourceDomain: number }> {
     const account = await stellarRpc.getAccount(args.caller);
 
@@ -42,8 +44,8 @@ export async function depositForBurnToEvm(args: {
                 bytesN32(mintRecipient),
                 Address.fromString(STELLAR.contracts.usdc).toScVal(),
                 bytesN32(destinationCaller),
-                nativeToScVal(STELLAR_MAX_FEE, { type: 'i128' }),
-                nativeToScVal(FINALIZED_THRESHOLD, { type: 'u32' }),
+                nativeToScVal(args.maxFee, { type: 'i128' }),
+                nativeToScVal(args.finalityThreshold, { type: 'u32' }),
             ),
         )
         .setTimeout(60)
@@ -63,6 +65,8 @@ export async function bridgeUsdcToEvm(args: {
     amount: bigint; // Stellar 7-decimal subunits
     destinationDomain: number;
     evmRecipient: `0x${string}`;
+    maxFee: bigint;
+    finalityThreshold: number;
 }): Promise<{ hash: string; sourceDomain: number }> {
     const account = await stellarRpc.getAccount(args.caller);
 
@@ -83,8 +87,8 @@ export async function bridgeUsdcToEvm(args: {
                 nativeToScVal(args.destinationDomain, { type: 'u32' }),
                 bytesN32(mintRecipient),
                 bytesN32(destinationCaller),
-                nativeToScVal(STELLAR_MAX_FEE, { type: 'i128' }),
-                nativeToScVal(FINALIZED_THRESHOLD, { type: 'u32' }),
+                nativeToScVal(args.maxFee, { type: 'i128' }),
+                nativeToScVal(args.finalityThreshold, { type: 'u32' }),
             ),
         )
         .setTimeout(60)

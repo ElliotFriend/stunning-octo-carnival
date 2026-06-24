@@ -3,11 +3,15 @@ import {
     EVM_CCTP_CONTRACTS,
     EVM_CHAINS,
     STELLAR,
+    STELLAR_MAX_FEE,
+    EVM_MAX_FEE,
     type Direction,
     type EvmChainId,
     type InboundFlow,
     type OutboundFlow,
+    type TransferSpeed,
 } from '$lib/config';
+import { fetchBurnFee, feeBpsFor, thresholdFor, computeMaxFee } from '$lib/circle/fees';
 import { bridgeUsdcToEvm, depositForBurnToEvm, mintAndForward } from '$lib/stellar/cctp';
 import { approveUsdc, getUsdcAllowance, parseUsdcStellar } from '$lib/stellar/usdc';
 import { approveEvmUsdc, getEvmUsdcAllowance, parseEvmUsdc } from '$lib/evm/usdc';
@@ -182,10 +186,25 @@ export function createTransferStore(
         evmChainId: EvmChainId;
         outboundFlow: OutboundFlow;
         amount: string;
+        speed: TransferSpeed;
     }) {
         state.amount = args.amount;
         const stellarAmount = parseUsdcStellar(args.amount);
         const evmCfg = EVM_CHAINS[args.evmChainId];
+
+        // Fetches burn-fee params. Called as the first line inside each burn
+        // performStep so any network/parse failure is caught by performStep → fail().
+        async function burnParams() {
+            const feeRows = await fetchBurnFee(STELLAR.domain, evmCfg.domain);
+            return {
+                maxFee: computeMaxFee(
+                    stellarAmount,
+                    feeBpsFor(feeRows, args.speed),
+                    STELLAR_MAX_FEE,
+                ),
+                finalityThreshold: thresholdFor(args.speed),
+            };
+        }
 
         let burnHash: string;
         if (args.outboundFlow === 'wrapper') {
@@ -193,11 +212,14 @@ export function createTransferStore(
             // Soroban's auth tree authorizes both inner calls from a single
             // Freighter signature.
             const h = await performStep('burning', 'burn', async () => {
+                const { maxFee, finalityThreshold } = await burnParams();
                 const r = await bridgeUsdcToEvm({
                     caller: args.stellarAddress,
                     amount: stellarAmount,
                     destinationDomain: evmCfg.domain,
                     evmRecipient: args.evmWallet.address,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: r.hash,
@@ -233,11 +255,14 @@ export function createTransferStore(
             if (approved === null) return;
 
             const h = await performStep('burning', 'burn', async () => {
+                const { maxFee, finalityThreshold } = await burnParams();
                 const r = await depositForBurnToEvm({
                     caller: args.stellarAddress,
                     amount: stellarAmount,
                     destinationDomain: evmCfg.domain,
                     evmRecipient: args.evmWallet.address,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: r.hash,
@@ -284,10 +309,21 @@ export function createTransferStore(
         evmChainId: EvmChainId;
         inboundFlow: InboundFlow;
         amount: string;
+        speed: TransferSpeed;
     }) {
         state.amount = args.amount;
         const evmAmount = parseEvmUsdc(args.evmChainId, args.amount);
         const evmCfg = EVM_CHAINS[args.evmChainId];
+
+        // Fetches burn-fee params. Called as the first line inside each burn
+        // performStep so any network/parse failure is caught by performStep → fail().
+        async function burnParams() {
+            const feeRows = await fetchBurnFee(evmCfg.domain, STELLAR.domain);
+            return {
+                maxFee: computeMaxFee(evmAmount, feeBpsFor(feeRows, args.speed), EVM_MAX_FEE),
+                finalityThreshold: thresholdFor(args.speed),
+            };
+        }
 
         let burnHash: string;
         if (args.inboundFlow === 'wrapper') {
@@ -295,11 +331,14 @@ export function createTransferStore(
             // bundled into one tx by the CctpWrapper. User signs a typed-data
             // permit and then submits a single transaction — no separate approve.
             const h = await performStep('burning', 'burn', async () => {
+                const { maxFee, finalityThreshold } = await burnParams();
                 const hash = await bridgeWithPermitToStellar({
                     chainId: args.evmChainId,
                     wallet: args.evmWallet,
                     amount: evmAmount,
                     stellarRecipient: args.stellarAddress,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: hash,
@@ -314,11 +353,14 @@ export function createTransferStore(
             // this is one atomic tx; on plain EOAs the wallet still presents
             // one prompt but submits two txs sequentially.
             const h = await performStep('burning', 'burn', async () => {
+                const { maxFee, finalityThreshold } = await burnParams();
                 const hash = await sendCallsBridgeToStellar({
                     chainId: args.evmChainId,
                     wallet: args.evmWallet,
                     amount: evmAmount,
                     stellarRecipient: args.stellarAddress,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: hash,
@@ -358,11 +400,14 @@ export function createTransferStore(
             if (approved === null) return;
 
             const h = await performStep('burning', 'burn', async () => {
+                const { maxFee, finalityThreshold } = await burnParams();
                 const hash = await depositForBurnWithHookToStellar({
                     chainId: args.evmChainId,
                     wallet: args.evmWallet,
                     amount: evmAmount,
                     stellarRecipient: args.stellarAddress,
+                    maxFee,
+                    finalityThreshold,
                 });
                 return {
                     result: hash,
@@ -412,6 +457,7 @@ export function createTransferStore(
         outboundFlow: OutboundFlow;
         inboundFlow: InboundFlow;
         amount: string;
+        speed: TransferSpeed;
     }) {
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
@@ -426,10 +472,14 @@ export function createTransferStore(
         state.error = null;
         state.amount = '';
         state.attestation = null;
-        if (args.direction === 'stellar-to-evm') {
-            await runStellarToEvm(args);
-        } else {
-            await runEvmToStellar(args);
+        try {
+            if (args.direction === 'stellar-to-evm') {
+                await runStellarToEvm(args);
+            } else {
+                await runEvmToStellar(args);
+            }
+        } catch (err) {
+            fail(errMsg(err));
         }
     }
 

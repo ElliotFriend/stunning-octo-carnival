@@ -1,13 +1,6 @@
 import { concatHex, encodeFunctionData, erc20Abi, pad, stringToHex, toHex, type Hex } from 'viem';
 import { StrKey } from '@stellar/stellar-sdk';
-import {
-    EVM_CCTP_CONTRACTS,
-    EVM_CHAINS,
-    FINALIZED_THRESHOLD,
-    EVM_MAX_FEE,
-    STELLAR,
-    type EvmChainId,
-} from '$lib/config';
+import { EVM_CCTP_CONTRACTS, EVM_CHAINS, STELLAR, type EvmChainId } from '$lib/config';
 import { getPublicClient } from './client';
 import { signEvmUsdcPermit } from './usdc';
 import type { EvmWallet } from './wallet';
@@ -135,7 +128,13 @@ export function strkeyToBytes32(strkey: string): Hex {
 // `TokenMessengerV2.depositForBurnWithHook` exactly; the CctpWrapper drops
 // `burnToken` from its own ABI because it knows its USDC, but on the wire
 // the underlying call still uses this same payload.
-function buildBurnToStellar(chainId: EvmChainId, amount: bigint, stellarRecipient: string) {
+function buildBurnToStellar(
+    chainId: EvmChainId,
+    amount: bigint,
+    stellarRecipient: string,
+    maxFee: bigint,
+    finalityThreshold: number,
+) {
     const cfg = EVM_CHAINS[chainId];
     const forwarderBytes32 = strkeyToBytes32(STELLAR.contracts.cctpForwarder);
     const hookData = encodeStellarForwarderHookData(stellarRecipient);
@@ -145,8 +144,8 @@ function buildBurnToStellar(chainId: EvmChainId, amount: bigint, stellarRecipien
         forwarderBytes32, //        mintRecipient (the forwarder — see invariant)
         cfg.usdc, //                burnToken (per-chain USDC address)
         forwarderBytes32, //        destinationCaller (MUST equal mintRecipient)
-        EVM_MAX_FEE, //             maxFee
-        FINALIZED_THRESHOLD, //     minFinalityThreshold
+        maxFee, //                  maxFee
+        finalityThreshold, //       minFinalityThreshold
         hookData, //                hookData (G-address routing payload)
     ] as const;
     return { cfg, forwarderBytes32, hookData, burnArgs };
@@ -164,8 +163,16 @@ export async function depositForBurnWithHookToStellar(args: {
     wallet: EvmWallet;
     amount: bigint;
     stellarRecipient: string;
+    maxFee: bigint;
+    finalityThreshold: number;
 }): Promise<`0x${string}`> {
-    const { cfg, burnArgs } = buildBurnToStellar(args.chainId, args.amount, args.stellarRecipient);
+    const { cfg, burnArgs } = buildBurnToStellar(
+        args.chainId,
+        args.amount,
+        args.stellarRecipient,
+        args.maxFee,
+        args.finalityThreshold,
+    );
     const hash = await args.wallet.walletClient.writeContract({
         account: args.wallet.address,
         chain: cfg.chain,
@@ -198,11 +205,15 @@ export async function bridgeWithPermitToStellar(args: {
     wallet: EvmWallet;
     amount: bigint;
     stellarRecipient: string;
+    maxFee: bigint;
+    finalityThreshold: number;
 }): Promise<`0x${string}`> {
     const { cfg, forwarderBytes32, hookData } = buildBurnToStellar(
         args.chainId,
         args.amount,
         args.stellarRecipient,
+        args.maxFee,
+        args.finalityThreshold,
     );
     if (!cfg.bridgeWrapper) {
         throw new Error(
@@ -228,8 +239,8 @@ export async function bridgeWithPermitToStellar(args: {
             STELLAR.domain,
             forwarderBytes32,
             forwarderBytes32,
-            EVM_MAX_FEE,
-            FINALIZED_THRESHOLD,
+            args.maxFee,
+            args.finalityThreshold,
             hookData,
             permit.deadline,
             permit.v,
@@ -259,8 +270,16 @@ export async function sendCallsBridgeToStellar(args: {
     wallet: EvmWallet;
     amount: bigint;
     stellarRecipient: string;
+    maxFee: bigint;
+    finalityThreshold: number;
 }): Promise<`0x${string}`> {
-    const { cfg, burnArgs } = buildBurnToStellar(args.chainId, args.amount, args.stellarRecipient);
+    const { cfg, burnArgs } = buildBurnToStellar(
+        args.chainId,
+        args.amount,
+        args.stellarRecipient,
+        args.maxFee,
+        args.finalityThreshold,
+    );
 
     const approveData = encodeFunctionData({
         abi: erc20Abi,

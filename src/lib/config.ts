@@ -94,11 +94,16 @@ export const DEFAULT_EVM_CHAIN: EvmChainId = 'arc';
 
 export const IRIS_API = 'https://iris-api-sandbox.circle.com';
 
-// CCTP V2 finality threshold for the burn. 2000 = "Standard" (wait for the
-// source chain to be finalized — ~13 min on Ethereum L2s, seconds on Arc).
-// Lower values unlock "Fast" transfers with a higher max_fee bound. We use
-// finalized everywhere for the demo; Fast Burn would set this to e.g. 1000.
-export const FINALIZED_THRESHOLD = 2000;
+// CCTP V2 finality thresholds for the burn.
+//   STANDARD (2000) = wait for source-chain finality (~13 min on L2s,
+//                     seconds on Arc). minimumFee is 0.
+//   FAST     (1000) = mint before finality; Circle charges a fast fee
+//                     (basis points of the amount) bounded by max_fee.
+export const STANDARD_THRESHOLD = 2000;
+export const FAST_THRESHOLD = 1000;
+
+export type TransferSpeed = 'standard' | 'fast';
+export const DEFAULT_SPEED: TransferSpeed = 'standard';
 
 // Defensive max_fee buffers. The burn reverts with InsufficientMaxFee
 // (#7105) if Circle's configured min_fee for the burn token exceeds this.

@@ -16,3 +16,5 @@ contracts/evm/cctp-wrapper/broadcast/
 
 # Claude Code per-user state (rewritten by the CLI)
 .claude/
+
+.superpowers/

@@ -3,11 +3,12 @@
         EVM_CCTP_CONTRACTS,
         EVM_CHAINS,
         EVM_MAX_FEE,
-        FINALIZED_THRESHOLD,
         STELLAR,
         type EvmChainId,
         type InboundFlow,
+        type TransferSpeed,
     } from '$lib/config';
+    import { fetchBurnFee, feeBpsFor, thresholdFor, computeMaxFee } from '$lib/circle/fees';
     import { encodeStellarForwarderHookData, strkeyToBytes32 } from '$lib/evm/cctp';
     import {
         fetchUsdcEip712Domain,
@@ -25,6 +26,7 @@
         amount,
         inboundFlow,
         sendCallsCap,
+        speed,
     }: {
         evmAddress: `0x${string}`;
         evmChainId: EvmChainId;
@@ -32,9 +34,15 @@
         amount: string;
         inboundFlow: InboundFlow;
         sendCallsCap: SendCallsCapability;
+        speed: TransferSpeed;
     } = $props();
 
     let cfg = $derived(EVM_CHAINS[evmChainId]);
+
+    // Route-keyed fee promise — re-runs when evmChainId changes, NOT per keystroke.
+    let srcDomain = $derived(EVM_CHAINS[evmChainId].domain);
+    let feePromise = $derived(fetchBurnFee(srcDomain, STELLAR.domain));
+    let threshold = $derived(thresholdFor(speed));
 
     type Parsed = { ok: true; raw: bigint } | { ok: false };
 
@@ -367,15 +375,33 @@
         <li class="row">
             <span class="arg-name">maxFee</span>
             <span class="arg-type">uint256</span>
-            <code class="arg-value">{EVM_MAX_FEE.toString()}</code>
-            <span class="arg-note">defensive cap, canonical 6-decimal units</span>
+            {#await feePromise then rows}
+                {@const bps = feeBpsFor(rows, speed)}
+                <code class="arg-value">
+                    {parsedAmount.ok
+                        ? computeMaxFee(parsedAmount.raw, bps, EVM_MAX_FEE).toString()
+                        : computeMaxFee(0n, bps, EVM_MAX_FEE).toString()}
+                </code>
+                <span class="arg-note">
+                    {bps > 0
+                        ? `${bps} bps fast fee + floor, canonical 6-decimal units`
+                        : 'floor (no fee at this speed), canonical 6-decimal units'}
+                </span>
+            {:catch}
+                <code class="arg-value">{EVM_MAX_FEE.toString()}</code>
+                <span class="arg-note">floor (fee API unavailable), canonical 6-decimal units</span>
+            {/await}
         </li>
 
         <li class="row">
             <span class="arg-name">minFinalityThreshold</span>
             <span class="arg-type">uint32</span>
-            <code class="arg-value">{FINALIZED_THRESHOLD}</code>
-            <span class="arg-note">Standard / finalized</span>
+            <code class="arg-value">{threshold}</code>
+            <span class="arg-note"
+                >{speed === 'fast' ? 'Fast' : 'Standard'} / {speed === 'fast'
+                    ? 'fast'
+                    : 'finalized'}</span
+            >
         </li>
 
         <li class="row wide">

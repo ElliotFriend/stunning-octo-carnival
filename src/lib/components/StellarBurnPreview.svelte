@@ -2,12 +2,13 @@
     import { pad } from 'viem';
     import {
         EVM_CHAINS,
-        FINALIZED_THRESHOLD,
         STELLAR,
         STELLAR_MAX_FEE,
         type EvmChainId,
         type OutboundFlow,
+        type TransferSpeed,
     } from '$lib/config';
+    import { fetchBurnFee, feeBpsFor, thresholdFor, computeMaxFee } from '$lib/circle/fees';
     import { parseUsdcStellar, formatUsdc } from '$lib/stellar/usdc';
     import { shortAddr } from '$lib/utils';
 
@@ -17,12 +18,14 @@
         evmChainId,
         amount,
         outboundFlow,
+        speed,
     }: {
         stellarAddress: string;
         evmRecipient: `0x${string}`;
         evmChainId: EvmChainId;
         amount: string;
         outboundFlow: OutboundFlow;
+        speed: TransferSpeed;
     } = $props();
 
     type Parsed = { ok: true; raw: bigint } | { ok: false };
@@ -43,6 +46,11 @@
     );
 
     let chain = $derived(EVM_CHAINS[evmChainId]);
+
+    // Route-keyed fee promise — re-runs when evmChainId changes, NOT per keystroke.
+    let destDomain = $derived(EVM_CHAINS[evmChainId].domain);
+    let feePromise = $derived(fetchBurnFee(STELLAR.domain, destDomain));
+    let threshold = $derived(thresholdFor(speed));
 
     // The wrapper exposes these extra args ahead of the burn args (usdc + tmm
     // routing addresses); the two-tx variant calls the TMM directly.
@@ -187,15 +195,27 @@
         <li class="row">
             <span class="arg-name">max_fee</span>
             <span class="arg-type">i128</span>
-            <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
-            <span class="arg-note">defensive cap</span>
+            {#await feePromise then rows}
+                {@const bps = feeBpsFor(rows, speed)}
+                <code class="arg-value">
+                    {parsedAmount.ok
+                        ? computeMaxFee(parsedAmount.raw, bps, STELLAR_MAX_FEE).toString()
+                        : computeMaxFee(0n, bps, STELLAR_MAX_FEE).toString()}
+                </code>
+                <span class="arg-note">
+                    {bps > 0 ? `${bps} bps fast fee + floor` : 'floor (no fee at this speed)'}
+                </span>
+            {:catch}
+                <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
+                <span class="arg-note">floor (fee API unavailable)</span>
+            {/await}
         </li>
 
         <li class="row">
             <span class="arg-name">min_finality_threshold</span>
             <span class="arg-type">u32</span>
-            <code class="arg-value">{FINALIZED_THRESHOLD}</code>
-            <span class="arg-note">finalized</span>
+            <code class="arg-value">{threshold}</code>
+            <span class="arg-note">{speed === 'fast' ? 'fast' : 'finalized'}</span>
         </li>
     </ul>
 
@@ -303,13 +323,26 @@
                         <li>
                             <span class="arg-name">max_fee</span>
                             <span class="arg-type">i128</span>
-                            <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
+                            {#await feePromise then rows}
+                                {@const bps = feeBpsFor(rows, speed)}
+                                <code class="arg-value">
+                                    {parsedAmount.ok
+                                        ? computeMaxFee(
+                                              parsedAmount.raw,
+                                              bps,
+                                              STELLAR_MAX_FEE,
+                                          ).toString()
+                                        : computeMaxFee(0n, bps, STELLAR_MAX_FEE).toString()}
+                                </code>
+                            {:catch}
+                                <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
+                            {/await}
                         </li>
                         <li>
                             <span class="arg-name">min_finality_threshold</span>
                             <span class="arg-type">u32</span>
-                            <code class="arg-value">{FINALIZED_THRESHOLD}</code>
-                            <span class="arg-note">finalized</span>
+                            <code class="arg-value">{threshold}</code>
+                            <span class="arg-note">{speed === 'fast' ? 'fast' : 'finalized'}</span>
                         </li>
                     </ul>
                 </li>
