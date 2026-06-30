@@ -94,6 +94,89 @@ succeeding, this isolates the cause to Circle's relayer not watching a **Stellar
 source** — not a destination, fee, threshold, caller, or encoding issue on our
 side.
 
+## Third trial: flat $0.20 service fee added to maxFee — still NOT forwarded
+
+Hypothesis: the quoted `forwardFee` is destination gas only, and Circle's docs
+cite a flat ~$0.20 forwarding *service* fee on all chains that the quote might
+omit — leaving the relayer silently underpaid. Folded a flat $0.20
+(`2_000_000` in 7-dp Stellar subunits) into `forwardedMaxFeeStellar` and re-ran.
+
+Two burns, Stellar→Arc (26) and Stellar→Base (6). The add landed correctly —
+maxFee in the burn message normalizes 7-dp→6-dp (÷10), so e.g. the Base burn
+carried maxFee = 403,716 (~$0.40 = ~$0.20 forwardFee + $0.20 service + margin).
+Decimals verified sound: `amount` and `maxFee` are both 6-dp-normalized in the
+message and self-consistent. **`feeExecuted` = 0 on both.** No change.
+
+The decisive evidence is in Iris's own response shape, comparing the
+Stellar-source message to a working EVM↔EVM forward (Base→Eth, control):
+
+| field                | EVM control (worked)   | Stellar source (ignored) |
+| -------------------- | ---------------------- | ------------------------ |
+| `forwardState`       | `"CONFIRMED"`          | **field absent**         |
+| `forwardTxHash`      | present (`0x1897…`)    | **absent**               |
+| `decodedMessageBody` | fully decoded          | **`null`**               |
+| `sender`             | `0x8fe6…`              | **`null`**               |
+| `feeExecuted`        | = maxFee (full)        | **0**                    |
+| finality min/exec    | 1000 / 1000 (Fast)     | 2000 / 2000 (N/A)        |
+
+Two structural tells beyond `feeExecuted`:
+
+1. **`forwardState` is entirely absent** on the Stellar message — the EVM burn
+   has it because the message entered the forwarding pipeline. Absent = never
+   enrolled. Circle's API surfaces no forward lifecycle for a Stellar source.
+2. **`decodedMessageBody` = `null` and `sender` = `null`** — Iris's own decoder
+   choked on the Stellar-source burn body (decoded the EVM one fully). Stellar
+   source is second-class even in the parsing layer, not just the relayer.
+
+Source messages for the record:
+- `GET /v2/messages/27?transactionHash=a321fc65…258c123` (Stellar→Base, $0.20 add)
+- `GET /v2/messages/6?transactionHash=0xdaeb3c49…f2334` (Base→Eth control, CONFIRMED)
+
+Also confirmed externally: Circle's supported-chains table now lists Fast
+Transfer as **N/A for Stellar**, matching every Stellar-source burn attesting at
+threshold 2000 regardless of `minFinalityThreshold`. That closes the
+Fast-downgrade sub-thread too.
+
+The $0.20 add was reverted — `forwardedMaxFeeStellar` is back to
+`protocol + forwardFee×10 + margin`. maxFee was moved twice (tightened, then
++$0.20) with zero change in `feeExecuted`/`forwardState`, proving maxFee was
+never the lever.
+
+## What the Iris OpenAPI spec confirms
+
+Cross-checked the on-chain findings against Circle's published spec
+(`https://developers.circle.com/openapi/cctp.yaml`). It corroborates the
+wrap-up from a different angle — Circle's own contract says the fee was fine and
+no forward was ever created:
+
+1. **The $0.20 service-fee add was double-counting.** `forwardFee` is documented
+   as *"Gas **and forwarding fees** for using the Circle Forwarder in USDC minor
+   units"*, with `high` = *"the high gas estimate **plus forwarding fee**"*. The
+   quoted fee already includes the service fee — our flat $0.20 add sat on top of
+   a number that already had it. (Harmless, since the relayer never ran; reverted
+   regardless.)
+2. **maxFee semantics confirm folding `forwardFee` in is correct.** `maxFee` =
+   *"Maximum fee to pay on the **destination domain**, in units of `burnToken`"*;
+   `feeExecuted` = the actual destination-domain fee charged. maxFee bounds the
+   destination-side fee the forwarder takes — exactly what `forwardedMaxFeeStellar`
+   sizes it to.
+3. **`delayReason` proves maxFee was never the blocker.** The spec defines a
+   `DelayReason` enum whose `insufficient_fee` value means *"The max fee specified
+   is insufficient for fast processing."* Our Stellar message returned
+   `delayReason: null` — Circle did not flag the fee as low. If maxFee were the
+   problem, this field would say `insufficient_fee`.
+4. **`forwardState` absent = never enrolled.** `forwardState` is an optional
+   free-form string (example `PENDING`); the example response pairs it with
+   `forwardTxHash`. Iris attaches both only when a forward record exists. Our
+   Stellar message has neither field — no record was ever created.
+5. **The API surface is EVM-shaped by construction.** `transactionHash` /
+   `sourceTxHash` are pattern-locked to `^0x[a-fA-F0-9]{64}$` (Stellar hashes are
+   64 hex *without* `0x` — ours didn't match, though the endpoint accepted them);
+   the `Address` schema and message decoder assume EVM-style addresses, which is
+   why `decodedMessageBody` / `sender` came back `null` for the Stellar-source
+   burn. Nothing in the spec enumerates supported forwarder sources or models a
+   Stellar source.
+
 ## Conclusion
 
 - Our forwarding implementation is correct (proven by the EVM↔EVM control).
@@ -102,7 +185,13 @@ side.
   the docs gating only by destination are both misleading — the relayer simply
   doesn't act on a Stellar source.
 - Also observed: Stellar-source burns do not honor Fast (always attest at
-  finalized / threshold 2000), independent of forwarding.
+  finalized / threshold 2000), independent of forwarding. Now corroborated by
+  Circle's supported-chains table listing Fast Transfer as **N/A for Stellar**.
+- Cleanest proof the relayer never enrolls a Stellar source: Iris omits the
+  `forwardState`/`forwardTxHash` fields entirely (present + `CONFIRMED` on a
+  working EVM forward) and returns `decodedMessageBody`/`sender` = `null` for the
+  Stellar-source message. maxFee is not the lever — moved twice with no effect on
+  `feeExecuted` (stayed 0) or `forwardState` (stayed absent).
 - Forwarder economics: `feeExecuted` ≈ full `maxFee`; forward fee tracks
   destination gas (~$0.20 Base, ~$1.45 Ethereum) — size `maxFee` tightly.
 
