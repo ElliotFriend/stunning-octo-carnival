@@ -37,7 +37,10 @@ Fast attempt confirmed everything on our side was correct:
 - `feeExecuted` = **0** — the relayer never processed it (no forwarding fee
   taken).
 - `finalityThresholdExecuted` = 2000 despite `minFinalityThreshold` = 1000 —
-  Stellar-as-source did not honor Fast either.
+  Stellar attests at finalized regardless. This is expected, not a limitation:
+  Stellar finalizes in seconds, so Fast Transfer (mint-before-finality for a fee)
+  is moot and the chain only offers Standard (same as Arc, Avalanche, and other
+  fast-finality chains). Standard *is* the fast path here. Not a forwarding clue.
 
 Key correction to an early assumption: **Iris attestation ≠ the forwarding
 relayer.** Iris attests every burn; the forwarding relayer is a separate service
@@ -83,7 +86,8 @@ flow. Same outcome, decoded from the burn message (Stellar 27 → Ethereum 0):
   ample for the ~$1.45 Ethereum forward fee.
 - `feeExecuted` = **0** — relayer did not process it.
 - `finalityThresholdExecuted` = 2000 despite `minFinalityThreshold` = 1000 —
-  Stellar source attested as finalized, not Fast (consistent with the Base run).
+  Stellar attests at finalized (consistent with the Base run); expected for a
+  fast-finality chain where Fast Transfer is moot, not a deficiency.
 - Raw attestation = two concatenated 65-byte attester signatures (valid), so the
   message is mintable; the burn is recoverable via manual `receiveMessage`
   (resume flow with Ethereum selected).
@@ -132,10 +136,13 @@ Source messages for the record:
 - `GET /v2/messages/27?transactionHash=a321fc65…258c123` (Stellar→Base, $0.20 add)
 - `GET /v2/messages/6?transactionHash=0xdaeb3c49…f2334` (Base→Eth control, CONFIRMED)
 
-Also confirmed externally: Circle's supported-chains table now lists Fast
-Transfer as **N/A for Stellar**, matching every Stellar-source burn attesting at
-threshold 2000 regardless of `minFinalityThreshold`. That closes the
-Fast-downgrade sub-thread too.
+Aside (not a forwarding signal): Circle's supported-chains table lists Fast
+Transfer as **N/A for Stellar**, which explains every Stellar-source burn
+attesting at threshold 2000 regardless of `minFinalityThreshold`. This is
+expected — Stellar finalizes in seconds, so Fast Transfer (mint-before-finality
+for a fee) is moot; the chain only offers Standard, same as Arc, Avalanche, and
+other fast-finality chains. Standard *is* the fast path. It is orthogonal to the
+forwarding gap, not corroboration of it.
 
 The $0.20 add was reverted — `forwardedMaxFeeStellar` is back to
 `protocol + forwardFee×10 + margin`. maxFee was moved twice (tightened, then
@@ -184,9 +191,11 @@ no forward was ever created:
   2026-06-24, across all tested destinations. The fee API quoting the route and
   the docs gating only by destination are both misleading — the relayer simply
   doesn't act on a Stellar source.
-- Also observed: Stellar-source burns do not honor Fast (always attest at
-  finalized / threshold 2000), independent of forwarding. Now corroborated by
-  Circle's supported-chains table listing Fast Transfer as **N/A for Stellar**.
+- Aside, not a forwarding signal: Stellar-source burns always attest at
+  finalized / threshold 2000, and Circle's table lists Fast Transfer as **N/A for
+  Stellar**. Expected — Stellar finalizes in seconds, so Fast Transfer is moot;
+  Standard is the only (and effectively the fast) path, same as Arc/Avalanche.
+  Orthogonal to the forwarding gap.
 - Cleanest proof the relayer never enrolls a Stellar source: Iris omits the
   `forwardState`/`forwardTxHash` fields entirely (present + `CONFIRMED` on a
   working EVM forward) and returns `decodedMessageBody`/`sender` = `null` for the
@@ -195,7 +204,8 @@ no forward was ever created:
 - Forwarder economics: `feeExecuted` ≈ full `maxFee`; forward fee tracks
   destination gas (~$0.20 Base, ~$1.45 Ethereum) — size `maxFee` tightly.
 
-Worth reporting to Circle: confirm whether/when Stellar-source forwarding (and
-Stellar-source Fast) will be enabled. Parked until then. The Ethereum Sepolia
-chain addition is a separate, general-purpose commit (cherry-pickable onto
-`main`).
+Worth reporting to Circle: confirm whether/when Stellar-source forwarding will be
+enabled (the relayer watching a Stellar source). Stellar-source Fast is *not* a
+gap to chase — Fast Transfer is moot on a fast-finality chain. Parked until then.
+The Ethereum Sepolia chain addition is a separate, general-purpose commit
+(cherry-pickable onto `main`).
