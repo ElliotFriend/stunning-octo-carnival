@@ -47,6 +47,12 @@
         'sourceDomain',
         'destinationDomain',
         'eventNonce',
+        // Forwarding-service lifecycle + attestation-delay reason. Present on
+        // forwarder transfers (and delayReason on any delayed attestation);
+        // skipped when absent/null so they add no noise to other flows.
+        'delayReason',
+        'forwardState',
+        'forwardTxHash',
     ] as const;
 
     function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -76,7 +82,7 @@
         const seen: string[] = [];
         for (const k of TOP_LEVEL_KEYS) {
             const v = attestation[k];
-            if (v === undefined) continue;
+            if (v === undefined || v === null) continue;
             rows.push({ key: k, value: v });
             seen.push(k);
         }

@@ -35,10 +35,16 @@
               : `Send ${evmShort} → Stellar`,
     );
 
+    // Stellar finalizes in seconds, so it always attests at the finalized
+    // threshold — Fast Transfer (mint-before-finality) is N/A as a source.
+    let stellarSource = $derived(direction === 'stellar-to-evm');
+
     let etaCaption = $derived(
-        speed === 'fast'
-            ? 'Fast: mint before finality — Circle charges a basis-point fee.'
-            : 'Standard: wait for source-chain finality — no fee.',
+        stellarSource
+            ? 'Standard only — Stellar finalizes in seconds, so Fast Transfer is N/A as a source.'
+            : speed === 'fast'
+              ? 'Fast: mint before finality — Circle charges a basis-point fee.'
+              : 'Standard: wait for source-chain finality — no fee.',
     );
 </script>
 
@@ -63,11 +69,11 @@
             <button
                 type="button"
                 class="chip"
-                class:active={speed === 'standard'}
+                class:active={stellarSource || speed === 'standard'}
                 {disabled}
                 onclick={() => (speed = 'standard')}
                 role="tab"
-                aria-selected={speed === 'standard'}
+                aria-selected={stellarSource || speed === 'standard'}
                 title="Wait for source-chain finality — no fee"
             >
                 Standard
@@ -75,12 +81,14 @@
             <button
                 type="button"
                 class="chip"
-                class:active={speed === 'fast'}
-                {disabled}
+                class:active={!stellarSource && speed === 'fast'}
+                disabled={disabled || stellarSource}
                 onclick={() => (speed = 'fast')}
                 role="tab"
-                aria-selected={speed === 'fast'}
-                title="Mint before finality — Circle charges a basis-point fee"
+                aria-selected={!stellarSource && speed === 'fast'}
+                title={stellarSource
+                    ? 'N/A from Stellar — it finalizes in seconds, so there is no pre-finality window to mint into'
+                    : 'Mint before finality — Circle charges a basis-point fee'}
             >
                 Fast
             </button>

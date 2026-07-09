@@ -39,7 +39,7 @@ import {
     receiveMessageOnEvm,
     sendCallsBridgeToStellar,
 } from '$lib/evm/cctp';
-import { pollAttestation, type IrisMessage } from '$lib/circle/iris';
+import { pollAttestation, fetchAttestation, type IrisMessage } from '$lib/circle/iris';
 import type { EvmWallet } from '$lib/evm/wallet';
 
 export type Phase = 'idle' | 'approving' | 'burning' | 'attesting' | 'minting' | 'done' | 'error';
@@ -446,6 +446,18 @@ export function createTransferStore(
             );
         });
         if (minted === null) return;
+
+        // Refresh the Iris message now that the relayer has minted — forwardState
+        // and forwardTxHash populate after the forward completes, not at
+        // attestation time, so the CCTP message display would otherwise omit them.
+        // Non-fatal: the mint already succeeded, so keep the earlier message on any
+        // error.
+        try {
+            const finalMsg = await fetchAttestation(STELLAR.domain, burnHash);
+            if (finalMsg) state.attestation = finalMsg;
+        } catch {
+            // ignore — display keeps the attestation-time message
+        }
 
         state.phase = 'done';
     }

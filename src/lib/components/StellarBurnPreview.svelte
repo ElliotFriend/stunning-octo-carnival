@@ -265,7 +265,10 @@
             <span class="arg-name">min_finality_threshold</span>
             <span class="arg-type">u32</span>
             <code class="arg-value">{threshold}</code>
-            <span class="arg-note">{speed === 'fast' ? 'fast' : 'finalized'}</span>
+            <span class="arg-note">
+                finalized — Stellar finalizes in seconds and always attests at {threshold} regardless
+                of this value, so Fast Transfer (mint-before-finality) is N/A as a source.
+            </span>
         </li>
 
         {#if isForwarder}

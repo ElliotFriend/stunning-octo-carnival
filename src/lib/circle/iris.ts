@@ -11,6 +11,13 @@ export type IrisMessage = {
     sourceDomain?: string;
     destinationDomain?: string;
     decodedMessage?: Record<string, unknown>;
+    // Attestation-delay reason (e.g. 'insufficient_fee'); null when not delayed.
+    delayReason?: string | null;
+    // Circle forwarding-service lifecycle. Present only when the burn was enrolled
+    // in the forwarder pipeline; forwardTxHash is the relayer's destination mint.
+    // Both populate after the forward completes, not at attestation time.
+    forwardState?: string;
+    forwardTxHash?: string;
 };
 
 type IrisResponse = {

@@ -61,6 +61,14 @@
 
     let evmLabel = $derived(EVM_CHAINS[evmChainId].label);
 
+    // Stellar finalizes in seconds and always attests at the finalized threshold,
+    // so Fast Transfer is not possible with Stellar as the source. Coerce the
+    // submitted/previewed speed to standard for that direction regardless of the
+    // picker's lingering value (the UI also disables Fast there).
+    let effectiveSpeed = $derived<TransferSpeed>(
+        direction === 'stellar-to-evm' ? 'standard' : speed,
+    );
+
     async function send() {
         if (!stellar.address || !evm) return;
         await transfer.start({
@@ -71,7 +79,7 @@
             outboundFlow,
             inboundFlow,
             amount: amount.trim(),
-            speed,
+            speed: effectiveSpeed,
         });
         // Skip refetch on error — the burn may not have landed, and a failed RPC
         // call here would clobber the error state shown to the user.
@@ -165,7 +173,7 @@
                 {evmChainId}
                 {amount}
                 {outboundFlow}
-                {speed}
+                speed={effectiveSpeed}
             />
         {/if}
     </section>
