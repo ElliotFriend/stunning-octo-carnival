@@ -6,7 +6,6 @@ import {
     nativeToScVal,
     xdr,
 } from '@stellar/stellar-sdk';
-import { Buffer } from 'buffer';
 import { STELLAR } from '$lib/config';
 import { stellarRpc } from './client';
 import { simulateSignAndSubmit } from './tx';
@@ -155,7 +154,7 @@ export async function depositForBurnWithHookForwarded(args: {
                 bytesN32(destinationCaller),
                 nativeToScVal(args.maxFee, { type: 'i128' }),
                 nativeToScVal(args.finalityThreshold, { type: 'u32' }),
-                nativeToScVal(Buffer.from(hookData), { type: 'bytes' }),
+                nativeToScVal(hookData, { type: 'bytes' }),
             ),
         )
         .setTimeout(60)
@@ -208,5 +207,5 @@ const ZERO_BYTES_32 = new Uint8Array(32);
 
 function bytesN32(bytes: Uint8Array): xdr.ScVal {
     if (bytes.length !== 32) throw new Error(`bytesN32 expects 32 bytes, got ${bytes.length}`);
-    return xdr.ScVal.scvBytes(Buffer.from(bytes));
+    return nativeToScVal(bytes, { type: 'bytes' });
 }
