@@ -6,6 +6,34 @@ Status: **RESOLVED** — Circle enabled Stellar-source forwarding; verified work
 end-to-end on 2026-07-09. See [Resolution](#resolution-2026-07-09). Our
 implementation was correct throughout; the gap was entirely Circle-side.
 
+## Verified forwarding transfers (testnet)
+
+All from source account `GA4XQJFTIVONNM2MXU5ICJU2HSRVNK6O45EJO7SJF43OXW4TDWQOQZ4W`
+(Stellar domain 27). Every one attested `complete`, `forwardState` COMPLETE/CONFIRMED,
+and the relayer minted on the destination with **no user `receiveMessage`**. Common to
+all: `hookData` = `0x636374702d666f72776172640000000000000000000000000000000000000000`
+("cctp-forward"), `destinationCaller` = zero, `feeExecuted` == `maxFee`,
+mint recipient `0xb636ce5b2f8959978568a2c9865da750811e273c`, forwarding-fee
+collector `0xc17d06b66fb2f308bb3af99231a45380a28563a2`.
+
+**Run 1 — 2026-07-09 ~17:35 UTC (first confirmation, two-tx path)**
+
+- **Stellar → Arc** (domain 26), 5.0 USDC, minted 4.969225 (fee 0.030775)
+    - burn: `245956ca8688a88fa8e1e6db3eba33e8bdcee24834db202ab858e4f9e15ccd42`
+    - forward mint (Arc): `0x76fbf7d4c62938cae40f31f0512767653a1f5f625047a578f8ef650221215bfd`
+- **Stellar → Base** (domain 6), 5.1 USDC, minted 4.896013 (fee 0.203987)
+    - burn: `9f6b909c1e76be89d77dddc9c1bcfa93496d44b6386cbc0f149991a0409e2bf0`
+    - forward mint (Base Sepolia): `0x1d979cfcc797c670df983f5e033bc328838e958cf990b579d6a55c9ab909907c`
+
+**Run 2 — 2026-07-09 ~21:00 UTC (wrapper `approve_and_deposit_with_hook` validated)**
+
+- **Stellar → Arc** (domain 26), 2.9 USDC, minted 2.882766 (fee 0.017234) — _two-tx forwarder_
+    - burn (`deposit_for_burn_with_hook` on TMM): `e16ae34b61c596a889852d636e0ae9cd44641293560caabb05ff06ead078c9e3`
+    - forward mint (Arc): `0x2e744c4ad065589ea2e92c543cdb45b7c40c48ae9644a63c1fba02521243c5ca`
+- **Stellar → Base** (domain 6), 2.8 USDC, minted 2.595982 (fee 0.204018) — _1-tx wrapper forwarder_
+    - burn (`approve_and_deposit_with_hook` on wrapper `CDC4EGIJSQU4I7LBER3CRMSTBAVR6JMCQXKJHZZU7WB2R32WQJDGKTN6`): `b22f1c922c43bf725bc295c701aaa867129f9eab0b68b555786b8cbcd1b2d98a`
+    - forward mint (Base Sepolia): `0x514e161eec728a0c6e4ce8f64f9bf0b2b1b2144b9da6bb50224c52c71f7483bb`
+
 ## Goal
 
 Probe whether Circle's Crosschain Forwarding Service (hosted relayer that
@@ -253,5 +281,25 @@ Base cap is intentionally that much looser than Arc's.
 
 `finalityThresholdExecuted` = 2000 on both, unchanged and expected — Stellar
 attests at finalized (Fast Transfer is N/A on a fast-finality chain).
+
+### Wrapper path forwarding (2026-07-09 ~21:00)
+
+The forwarder was reworked into a boolean orthogonal to the transaction shape, so
+forwarding now runs through either the two-tx path or the wrapper contract's
+`approve_and_deposit_with_hook` (which passes `hook_data` into the inner
+`deposit_for_burn_with_hook`). Both shapes verified end-to-end (hashes in the
+[reference block](#verified-forwarding-transfers-testnet), run 2):
+
+- **Two-tx forwarder → Arc**: 2.9 USDC burned, relayer minted 2.882766 (fee
+  0.017234), `forwardState` COMPLETE.
+- **Wrapper forwarder → Base** (`approve_and_deposit_with_hook`, one Soroban tx):
+  2.8 USDC burned, relayer minted 2.595982 (fee 0.204018), `forwardState`
+  CONFIRMED (destination mint landed, status 1; flips to COMPLETE after Base
+  finality). This was the first on-chain run of the wrapper + forwarder combo — it
+  works: the wrapper carries the `cctp-forward` hookData through and the relayer
+  picks it up identically to the direct TMM burn.
+
+Same invariants held on both: `hookData` = `cctp-forward`, `destinationCaller`
+zero, `feeExecuted` == `maxFee`, `delayReason` null.
 
 Follow-up: report the confirmed fix back to Circle in Discord (pending).
