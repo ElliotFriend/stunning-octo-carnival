@@ -12,8 +12,8 @@ each direction has multiple flows so you can see (and compare) the UX
 tradeoffs CCTP V2 unlocks.
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Open `http://localhost:5173`.
