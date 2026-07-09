@@ -114,9 +114,9 @@ export async function bridgeUsdcToEvm(args: {
 // picks it up regardless. destination_caller is left ZERO (permissionless) so if
 // the relayer ignores the burn, the mint can still be completed manually via
 // receiveMessage (the demo's resume flow) — funds are never stranded.
-const CCTP_FORWARD_MAGIC = 'cctp-forward';
+export const CCTP_FORWARD_MAGIC = 'cctp-forward';
 
-function encodeCctpForwardHookData(): Uint8Array {
+export function encodeCctpForwardHookData(): Uint8Array {
     // 32 bytes total: 24 magic + u32 version + u32 length, all-zero tail. Writing
     // the ascii magic at offset 0 leaves the magic padding, version, and length
     // fields at their zero defaults — exactly the documented "no extra data" form.
