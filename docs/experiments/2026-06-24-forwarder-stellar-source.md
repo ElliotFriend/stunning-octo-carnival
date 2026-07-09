@@ -42,7 +42,7 @@ Fast attempt confirmed everything on our side was correct:
   Stellar attests at finalized regardless. This is expected, not a limitation:
   Stellar finalizes in seconds, so Fast Transfer (mint-before-finality for a fee)
   is moot and the chain only offers Standard (same as Arc, Avalanche, and other
-  fast-finality chains). Standard *is* the fast path here. Not a forwarding clue.
+  fast-finality chains). Standard _is_ the fast path here. Not a forwarding clue.
 
 Key correction to an early assumption: **Iris attestation ≠ the forwarding
 relayer.** Iris attests every burn; the forwarding relayer is a separate service
@@ -116,14 +116,14 @@ message and self-consistent. **`feeExecuted` = 0 on both.** No change.
 The decisive evidence is in Iris's own response shape, comparing the
 Stellar-source message to a working EVM↔EVM forward (Base→Eth, control):
 
-| field                | EVM control (worked)   | Stellar source (ignored) |
-| -------------------- | ---------------------- | ------------------------ |
-| `forwardState`       | `"CONFIRMED"`          | **field absent**         |
-| `forwardTxHash`      | present (`0x1897…`)    | **absent**               |
-| `decodedMessageBody` | fully decoded          | **`null`**               |
-| `sender`             | `0x8fe6…`              | **`null`**               |
-| `feeExecuted`        | = maxFee (full)        | **0**                    |
-| finality min/exec    | 1000 / 1000 (Fast)     | 2000 / 2000 (N/A)        |
+| field                | EVM control (worked) | Stellar source (ignored) |
+| -------------------- | -------------------- | ------------------------ |
+| `forwardState`       | `"CONFIRMED"`        | **field absent**         |
+| `forwardTxHash`      | present (`0x1897…`)  | **absent**               |
+| `decodedMessageBody` | fully decoded        | **`null`**               |
+| `sender`             | `0x8fe6…`            | **`null`**               |
+| `feeExecuted`        | = maxFee (full)      | **0**                    |
+| finality min/exec    | 1000 / 1000 (Fast)   | 2000 / 2000 (N/A)        |
 
 Two structural tells beyond `feeExecuted`:
 
@@ -135,6 +135,7 @@ Two structural tells beyond `feeExecuted`:
    source is second-class even in the parsing layer, not just the relayer.
 
 Source messages for the record:
+
 - `GET /v2/messages/27?transactionHash=a321fc65…258c123` (Stellar→Base, $0.20 add)
 - `GET /v2/messages/6?transactionHash=0xdaeb3c49…f2334` (Base→Eth control, CONFIRMED)
 
@@ -143,7 +144,7 @@ Transfer as **N/A for Stellar**, which explains every Stellar-source burn
 attesting at threshold 2000 regardless of `minFinalityThreshold`. This is
 expected — Stellar finalizes in seconds, so Fast Transfer (mint-before-finality
 for a fee) is moot; the chain only offers Standard, same as Arc, Avalanche, and
-other fast-finality chains. Standard *is* the fast path. It is orthogonal to the
+other fast-finality chains. Standard _is_ the fast path. It is orthogonal to the
 forwarding gap, not corroboration of it.
 
 The $0.20 add was reverted — `forwardedMaxFeeStellar` is back to
@@ -165,13 +166,13 @@ no forward was ever created:
    a number that already had it. (Harmless, since the relayer never ran; reverted
    regardless.)
 2. **maxFee semantics confirm folding `forwardFee` in is correct.** `maxFee` =
-   *"Maximum fee to pay on the **destination domain**, in units of `burnToken`"*;
+   _"Maximum fee to pay on the **destination domain**, in units of `burnToken`"_;
    `feeExecuted` = the actual destination-domain fee charged. maxFee bounds the
    destination-side fee the forwarder takes — exactly what `forwardedMaxFeeStellar`
    sizes it to.
 3. **`delayReason` proves maxFee was never the blocker.** The spec defines a
-   `DelayReason` enum whose `insufficient_fee` value means *"The max fee specified
-   is insufficient for fast processing."* Our Stellar message returned
+   `DelayReason` enum whose `insufficient_fee` value means _"The max fee specified
+   is insufficient for fast processing."_ Our Stellar message returned
    `delayReason: null` — Circle did not flag the fee as low. If maxFee were the
    problem, this field would say `insufficient_fee`.
 4. **`forwardState` absent = never enrolled.** `forwardState` is an optional
@@ -180,7 +181,7 @@ no forward was ever created:
    Stellar message has neither field — no record was ever created.
 5. **The API surface is EVM-shaped by construction.** `transactionHash` /
    `sourceTxHash` are pattern-locked to `^0x[a-fA-F0-9]{64}$` (Stellar hashes are
-   64 hex *without* `0x` — ours didn't match, though the endpoint accepted them);
+   64 hex _without_ `0x` — ours didn't match, though the endpoint accepted them);
    the `Address` schema and message decoder assume EVM-style addresses, which is
    why `decodedMessageBody` / `sender` came back `null` for the Stellar-source
    burn. Nothing in the spec enumerates supported forwarder sources or models a
@@ -207,7 +208,7 @@ no forward was ever created:
   destination gas (~$0.20 Base, ~$1.45 Ethereum) — size `maxFee` tightly.
 
 Worth reporting to Circle: confirm whether/when Stellar-source forwarding will be
-enabled (the relayer watching a Stellar source). Stellar-source Fast is *not* a
+enabled (the relayer watching a Stellar source). Stellar-source Fast is _not_ a
 gap to chase — Fast Transfer is moot on a fast-finality chain. Parked until then.
 The Ethereum Sepolia chain addition is a separate, general-purpose commit
 (cherry-pickable onto `main`).
@@ -219,10 +220,10 @@ from the same source account (`GA4XQJFT…`, Stellar domain 27) — two burns,
 Stellar→Arc (26) and Stellar→Base (6), unchanged code. **Both forwarded and
 minted with no manual `receiveMessage`.** Confirmed on-chain on both destinations.
 
-| leg           | burn (source tx)     | amount | nonce        | forwardState | forwardTxHash (dest) | minted → recipient | fee → collector |
-| ------------- | -------------------- | ------ | ------------ | ------------ | -------------------- | ------------------ | --------------- |
-| Stellar→Arc   | `245956ca…5ccd42`    | 5.0    | `0xfed47d…`  | **COMPLETE** | `0x76fbf7d4…215bfd`  | 4.969225           | 0.030775        |
-| Stellar→Base  | `9f6b909c…09e2bf0`   | 5.1    | `0xf7f53f…`  | **COMPLETE** | `0x1d979cfc…909907c` | 4.896013           | 0.203987        |
+| leg          | burn (source tx)   | amount | nonce       | forwardState | forwardTxHash (dest) | minted → recipient | fee → collector |
+| ------------ | ------------------ | ------ | ----------- | ------------ | -------------------- | ------------------ | --------------- |
+| Stellar→Arc  | `245956ca…5ccd42`  | 5.0    | `0xfed47d…` | **COMPLETE** | `0x76fbf7d4…215bfd`  | 4.969225           | 0.030775        |
+| Stellar→Base | `9f6b909c…09e2bf0` | 5.1    | `0xf7f53f…` | **COMPLETE** | `0x1d979cfc…909907c` | 4.896013           | 0.203987        |
 
 - recipient (both): `0xb636ce5b2f8959978568a2c9865da750811e273c`
 - fee collector (both): `0xc17d06b66fb2f308bb3af99231a45380a28563a2`
@@ -233,12 +234,12 @@ minted with no manual `receiveMessage`.** Confirmed on-chain on both destination
 Every structural tell from the third trial has flipped for the Stellar-source
 message — the mirror image of the table in that section:
 
-| field                | 2026-06-24 (ignored) | 2026-07-09 (forwarded) |
-| -------------------- | -------------------- | ---------------------- |
-| `forwardState`       | field absent         | **`COMPLETE`**         |
-| `forwardTxHash`      | absent               | **present** (both legs)|
-| `decodedMessageBody` | `null`               | **fully decoded**      |
-| `feeExecuted`        | 0                    | **= maxFee** (full)    |
+| field                | 2026-06-24 (ignored) | 2026-07-09 (forwarded)  |
+| -------------------- | -------------------- | ----------------------- |
+| `forwardState`       | field absent         | **`COMPLETE`**          |
+| `forwardTxHash`      | absent               | **present** (both legs) |
+| `decodedMessageBody` | `null`               | **fully decoded**       |
+| `feeExecuted`        | 0                    | **= maxFee** (full)     |
 
 Iris now enrolls the Stellar-source burn into the forwarding pipeline and its
 decoder parses the Stellar-source body — both the relayer and parsing layers were
