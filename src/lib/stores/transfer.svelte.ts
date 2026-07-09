@@ -21,6 +21,7 @@ import {
 } from '$lib/circle/fees';
 import {
     bridgeUsdcToEvm,
+    bridgeUsdcToEvmWithHook,
     depositForBurnToEvm,
     depositForBurnWithHookForwarded,
     mintAndForward,
@@ -61,6 +62,7 @@ export type TransferState = {
     direction: Direction;
     evmChainId: EvmChainId;
     outboundFlow: OutboundFlow;
+    forwarder: boolean;
     inboundFlow: InboundFlow;
     phase: Phase;
     amount: string;
@@ -73,15 +75,17 @@ const initialState = (
     direction: Direction,
     evmChainId: EvmChainId,
     outboundFlow: OutboundFlow,
+    forwarder: boolean,
     inboundFlow: InboundFlow,
 ): TransferState => ({
     direction,
     evmChainId,
     outboundFlow,
+    forwarder,
     inboundFlow,
     phase: 'idle',
     amount: '',
-    steps: stepsFor(direction, evmChainId, outboundFlow, inboundFlow),
+    steps: stepsFor(direction, evmChainId, outboundFlow, forwarder, inboundFlow),
     error: null,
     attestation: null,
 });
@@ -90,43 +94,32 @@ function stepsFor(
     direction: Direction,
     evmChainId: EvmChainId,
     outboundFlow: OutboundFlow,
+    forwarder: boolean,
     inboundFlow: InboundFlow,
 ): Step[] {
     const evmLabel = EVM_CHAINS[evmChainId].label;
     if (direction === 'stellar-to-evm') {
-        if (outboundFlow === 'forwarder') {
-            return [
-                { key: 'approve', label: 'Approve TokenMessenger on Stellar', status: 'pending' },
-                {
-                    key: 'burn',
-                    label: 'Burn USDC on Stellar (forwarder hook)',
-                    status: 'pending',
-                },
-                { key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
-                {
-                    key: 'mint',
-                    label: `Await Circle relayer mint on ${evmLabel}`,
-                    status: 'pending',
-                },
-            ];
+        // The wrapper shape bundles approve + burn into one tx (no separate
+        // approve step); the forwarder toggle only changes the burn/mint labels.
+        const burnLabel =
+            outboundFlow === 'wrapper'
+                ? `Approve + burn USDC on Stellar (one tx${forwarder ? ', forwarder hook' : ''})`
+                : `Burn USDC on Stellar${forwarder ? ' (forwarder hook)' : ''}`;
+        const mintStep: Step = forwarder
+            ? { key: 'mint', label: `Await Circle relayer mint on ${evmLabel}`, status: 'pending' }
+            : { key: 'mint', label: `Mint USDC on ${evmLabel}`, status: 'pending' };
+        const steps: Step[] = [];
+        if (outboundFlow !== 'wrapper') {
+            steps.push({
+                key: 'approve',
+                label: 'Approve TokenMessenger on Stellar',
+                status: 'pending',
+            });
         }
-        if (outboundFlow === 'wrapper') {
-            return [
-                {
-                    key: 'burn',
-                    label: 'Approve + burn USDC on Stellar (one tx)',
-                    status: 'pending',
-                },
-                { key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
-                { key: 'mint', label: `Mint USDC on ${evmLabel}`, status: 'pending' },
-            ];
-        }
-        return [
-            { key: 'approve', label: 'Approve TokenMessenger on Stellar', status: 'pending' },
-            { key: 'burn', label: 'Burn USDC on Stellar', status: 'pending' },
-            { key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
-            { key: 'mint', label: `Mint USDC on ${evmLabel}`, status: 'pending' },
-        ];
+        steps.push({ key: 'burn', label: burnLabel, status: 'pending' });
+        steps.push({ key: 'attest', label: 'Wait for Circle attestation', status: 'pending' });
+        steps.push(mintStep);
+        return steps;
     }
     if (inboundFlow === 'wrapper') {
         return [
@@ -166,10 +159,17 @@ export function createTransferStore(
     initialDirection: Direction,
     initialEvmChain: EvmChainId,
     initialOutbound: OutboundFlow,
+    initialForwarder: boolean,
     initialInbound: InboundFlow,
 ) {
     let state = $state<TransferState>(
-        initialState(initialDirection, initialEvmChain, initialOutbound, initialInbound),
+        initialState(
+            initialDirection,
+            initialEvmChain,
+            initialOutbound,
+            initialForwarder,
+            initialInbound,
+        ),
     );
 
     function reset() {
@@ -177,6 +177,7 @@ export function createTransferStore(
             state.direction,
             state.evmChainId,
             state.outboundFlow,
+            state.forwarder,
             state.inboundFlow,
         );
     }
@@ -219,6 +220,7 @@ export function createTransferStore(
         evmWallet: EvmWallet;
         evmChainId: EvmChainId;
         outboundFlow: OutboundFlow;
+        forwarder: boolean;
         amount: string;
         speed: TransferSpeed;
     }) {
@@ -226,11 +228,11 @@ export function createTransferStore(
         const stellarAmount = parseUsdcStellar(args.amount);
         const evmCfg = EVM_CHAINS[args.evmChainId];
 
-        // EXPERIMENTAL forwarder path — approve, burn with the Circle forwarding
-        // hookData, then *observe* whether Circle's relayer mints on the EVM side
-        // (no user receiveMessage). Isolated as an early return to keep the
-        // standard wrapper/two-tx flow untouched.
-        if (args.outboundFlow === 'forwarder') {
+        // EXPERIMENTAL forwarder path — burn with the Circle forwarding hookData
+        // (via the wrapper or two-tx shape), then *observe* whether Circle's
+        // relayer mints on the EVM side (no user receiveMessage). Isolated as an
+        // early return to keep the standard wrapper/two-tx flow untouched.
+        if (args.forwarder) {
             await runStellarToEvmForwarded(args, stellarAmount, evmCfg);
             return;
         }
@@ -354,30 +356,38 @@ export function createTransferStore(
             stellarAddress: string;
             evmWallet: EvmWallet;
             evmChainId: EvmChainId;
+            outboundFlow: OutboundFlow;
             speed: TransferSpeed;
         },
         stellarAmount: bigint,
         evmCfg: (typeof EVM_CHAINS)[EvmChainId],
     ) {
-        const approved = await performStep('approving', 'approve', async () => {
-            const existing = await getUsdcAllowance({
-                from: args.stellarAddress,
-                spender: STELLAR.contracts.tokenMessengerMinter,
+        // The wrapper shape bundles approve + burn into one Soroban tx via
+        // approve_and_deposit_with_hook, so the separate approve step is only run
+        // for the two-tx shape.
+        const isWrapper = args.outboundFlow === 'wrapper';
+
+        if (!isWrapper) {
+            const approved = await performStep('approving', 'approve', async () => {
+                const existing = await getUsdcAllowance({
+                    from: args.stellarAddress,
+                    spender: STELLAR.contracts.tokenMessengerMinter,
+                });
+                if (existing >= stellarAmount) {
+                    return { result: true, patch: { detail: 'sufficient allowance already set' } };
+                }
+                const hash = await approveUsdc({
+                    from: args.stellarAddress,
+                    spender: STELLAR.contracts.tokenMessengerMinter,
+                    amount: stellarAmount,
+                });
+                return {
+                    result: true,
+                    patch: { hash, hashUrl: stellarTxUrl(hash), detail: 'allowance set' },
+                };
             });
-            if (existing >= stellarAmount) {
-                return { result: true, patch: { detail: 'sufficient allowance already set' } };
-            }
-            const hash = await approveUsdc({
-                from: args.stellarAddress,
-                spender: STELLAR.contracts.tokenMessengerMinter,
-                amount: stellarAmount,
-            });
-            return {
-                result: true,
-                patch: { hash, hashUrl: stellarTxUrl(hash), detail: 'allowance set' },
-            };
-        });
-        if (approved === null) return;
+            if (approved === null) return;
+        }
 
         // Recipient balance before the burn — the observe step watches for an
         // increase to detect a relayer-completed mint.
@@ -392,14 +402,17 @@ export function createTransferStore(
         const burnHash = await performStep('burning', 'burn', async () => {
             const rows = await fetchForwardFee(STELLAR.domain, evmCfg.domain);
             const maxFee = forwardedMaxFeeStellar(rows, args.speed, stellarAmount);
-            const r = await depositForBurnWithHookForwarded({
+            const burnArgs = {
                 caller: args.stellarAddress,
                 amount: stellarAmount,
                 destinationDomain: evmCfg.domain,
                 evmRecipient: args.evmWallet.address,
                 maxFee,
                 finalityThreshold: thresholdFor(args.speed),
-            });
+            };
+            const r = isWrapper
+                ? await bridgeUsdcToEvmWithHook(burnArgs)
+                : await depositForBurnWithHookForwarded(burnArgs);
             return {
                 result: r.hash,
                 patch: {
@@ -614,6 +627,7 @@ export function createTransferStore(
         evmWallet: EvmWallet;
         evmChainId: EvmChainId;
         outboundFlow: OutboundFlow;
+        forwarder: boolean;
         inboundFlow: InboundFlow;
         amount: string;
         speed: TransferSpeed;
@@ -621,11 +635,13 @@ export function createTransferStore(
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
         state.outboundFlow = args.outboundFlow;
+        state.forwarder = args.forwarder;
         state.inboundFlow = args.inboundFlow;
         state.steps = stepsFor(
             args.direction,
             args.evmChainId,
             args.outboundFlow,
+            args.forwarder,
             args.inboundFlow,
         );
         state.error = null;
@@ -657,6 +673,7 @@ export function createTransferStore(
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
         state.outboundFlow = 'two-tx';
+        state.forwarder = false;
         state.inboundFlow = 'two-tx';
         state.error = null;
         state.attestation = null;
@@ -667,21 +684,23 @@ export function createTransferStore(
             ? stellarTxUrl(args.burnHash)
             : evmTxUrl(args.evmChainId, args.burnHash);
 
-        state.steps = stepsFor(args.direction, args.evmChainId, 'two-tx', 'two-tx').map((s) => {
-            if (s.key === 'approve') {
-                return { ...s, status: 'done', detail: 'skipped (resumed)' };
-            }
-            if (s.key === 'burn') {
-                return {
-                    ...s,
-                    status: 'done',
-                    detail: 'skipped (resumed)',
-                    hash: args.burnHash,
-                    hashUrl: burnHashUrl,
-                };
-            }
-            return s;
-        });
+        state.steps = stepsFor(args.direction, args.evmChainId, 'two-tx', false, 'two-tx').map(
+            (s) => {
+                if (s.key === 'approve') {
+                    return { ...s, status: 'done', detail: 'skipped (resumed)' };
+                }
+                if (s.key === 'burn') {
+                    return {
+                        ...s,
+                        status: 'done',
+                        detail: 'skipped (resumed)',
+                        hash: args.burnHash,
+                        hashUrl: burnHashUrl,
+                    };
+                }
+                return s;
+            },
+        );
 
         const sourceDomain = stellarSource ? STELLAR.domain : EVM_CHAINS[args.evmChainId].domain;
 

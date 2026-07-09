@@ -26,6 +26,7 @@
         evmChainId,
         amount,
         outboundFlow,
+        forwarder,
         speed,
     }: {
         stellarAddress: string;
@@ -33,6 +34,7 @@
         evmChainId: EvmChainId;
         amount: string;
         outboundFlow: OutboundFlow;
+        forwarder: boolean;
         speed: TransferSpeed;
     } = $props();
 
@@ -60,12 +62,11 @@
     let feePromise = $derived(fetchBurnFee(STELLAR.domain, destDomain));
     let threshold = $derived(thresholdFor(speed));
 
-    // The wrapper exposes these extra args ahead of the burn args (usdc + tmm
-    // routing addresses); the two-tx and forwarder variants call the TMM directly.
+    // The wrapper exposes extra args ahead of the burn args (usdc + tmm routing
+    // addresses); the two-tx shape calls the TMM directly. The forwarder toggle
+    // is orthogonal — it routes either shape through the *_with_hook variant.
     let isWrapper = $derived(outboundFlow === 'wrapper');
-    // Forwarder: two-tx shape (approve + burn) against the TMM, but the burn is
-    // deposit_for_burn_with_hook carrying the Circle forwarding magic hookData.
-    let isForwarder = $derived(outboundFlow === 'forwarder');
+    let isForwarder = $derived(forwarder);
 
     let contractAddress = $derived(
         isWrapper ? STELLAR.contracts.bridgeWrapper : STELLAR.contracts.tokenMessengerMinter,
@@ -73,12 +74,14 @@
     let contractLabel = $derived(
         isWrapper ? 'CctpWrapper (user-deployed)' : 'TokenMessengerMinter',
     );
+    // Inner burn call the wrapper makes (also the auth-tree function name).
+    let innerBurnFn = $derived(isForwarder ? 'deposit_for_burn_with_hook' : 'deposit_for_burn');
     let functionName = $derived(
         isWrapper
-            ? 'approve_and_deposit'
-            : isForwarder
-              ? 'deposit_for_burn_with_hook'
-              : 'deposit_for_burn',
+            ? isForwarder
+                ? 'approve_and_deposit_with_hook'
+                : 'approve_and_deposit'
+            : innerBurnFn,
     );
 
     // Forwarder maxFee comes from the ?forward=true quote (protocol fee +
@@ -134,19 +137,20 @@
     {#if isWrapper}
         <p class="flow-note">
             Wrapper flow — one Soroban tx, one Freighter prompt. Soroban's auth tree authorizes the
-            two inner calls below from this single signature.
-        </p>
-    {:else if isForwarder}
-        <p class="flow-note">
-            Forwarder flow (experimental) — a separate <code>usdc.approve(...)</code> precedes this
-            burn (skipped if allowance is sufficient). The <code>hook_data</code> below tags the burn
-            for Circle's forwarding relayer, which auto-mints on the destination and deducts its fee
-            from the minted USDC — no destination gas from you.
+            two inner calls below (<code>approve</code> + <code>{innerBurnFn}</code>) from this
+            single signature.
         </p>
     {:else}
         <p class="flow-note">
             Two-tx flow — a separate <code>usdc.approve(...)</code> precedes this burn (skipped if allowance
             is sufficient).
+        </p>
+    {/if}
+    {#if isForwarder}
+        <p class="flow-note">
+            Forwarder on (experimental) — the <code>hook_data</code> below tags the burn for Circle's
+            forwarding relayer, which auto-mints on the destination and deducts its fee from the minted
+            USDC (no destination gas from you).
         </p>
     {/if}
 
@@ -277,8 +281,8 @@
                 <span class="arg-type">Bytes</span>
                 <code class="arg-hex">{hookDataHex}</code>
                 <span class="arg-note">
-                    32 bytes — ascii "{CCTP_FORWARD_MAGIC}" (bytes 0–23) + u32 version 0 + u32 length
-                    0. The magic Circle's forwarding relayer watches for.
+                    32 bytes — ascii "{CCTP_FORWARD_MAGIC}" (bytes 0–23) + u32 version 0 + u32
+                    length 0. The magic Circle's forwarding relayer watches for.
                 </span>
             </li>
         {/if}
@@ -339,7 +343,7 @@
                             {shortContract(STELLAR.contracts.tokenMessengerMinter)}
                         </code>
                         <span class="auth-dot">·</span>
-                        <code class="auth-fn">deposit_for_burn</code>
+                        <code class="auth-fn">{innerBurnFn}</code>
                     </div>
                     <ul class="auth-args">
                         <li>
@@ -388,20 +392,34 @@
                         <li>
                             <span class="arg-name">max_fee</span>
                             <span class="arg-type">i128</span>
-                            {#await feePromise then rows}
-                                {@const bps = feeBpsFor(rows, speed)}
-                                <code class="arg-value">
-                                    {parsedAmount.ok
-                                        ? computeMaxFee(
-                                              parsedAmount.raw,
-                                              bps,
-                                              STELLAR_MAX_FEE,
-                                          ).toString()
-                                        : computeMaxFee(0n, bps, STELLAR_MAX_FEE).toString()}
-                                </code>
-                            {:catch}
-                                <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
-                            {/await}
+                            {#if isForwarder}
+                                {#await forwardFeePromise then rows}
+                                    <code class="arg-value">
+                                        {forwardedMaxFeeStellar(
+                                            rows,
+                                            speed,
+                                            parsedAmount.ok ? parsedAmount.raw : 0n,
+                                        ).toString()}
+                                    </code>
+                                {:catch}
+                                    <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
+                                {/await}
+                            {:else}
+                                {#await feePromise then rows}
+                                    {@const bps = feeBpsFor(rows, speed)}
+                                    <code class="arg-value">
+                                        {parsedAmount.ok
+                                            ? computeMaxFee(
+                                                  parsedAmount.raw,
+                                                  bps,
+                                                  STELLAR_MAX_FEE,
+                                              ).toString()
+                                            : computeMaxFee(0n, bps, STELLAR_MAX_FEE).toString()}
+                                    </code>
+                                {:catch}
+                                    <code class="arg-value">{STELLAR_MAX_FEE.toString()}</code>
+                                {/await}
+                            {/if}
                         </li>
                         <li>
                             <span class="arg-name">min_finality_threshold</span>
@@ -409,6 +427,14 @@
                             <code class="arg-value">{threshold}</code>
                             <span class="arg-note">{speed === 'fast' ? 'fast' : 'finalized'}</span>
                         </li>
+                        {#if isForwarder}
+                            <li class="wide">
+                                <span class="arg-name">hook_data</span>
+                                <span class="arg-type">Bytes</span>
+                                <code class="arg-hex">{hookDataHex}</code>
+                                <span class="arg-note">ascii "{CCTP_FORWARD_MAGIC}" magic</span>
+                            </li>
+                        {/if}
                     </ul>
                 </li>
             </ol>

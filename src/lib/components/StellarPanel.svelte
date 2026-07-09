@@ -12,11 +12,13 @@
             networkPassphrase: null,
         }),
         outboundFlow = $bindable<OutboundFlow>('two-tx'),
+        forwarder = $bindable<boolean>(false),
         direction,
         disabled = false,
     }: {
         freighter?: FreighterState;
         outboundFlow?: OutboundFlow;
+        forwarder?: boolean;
         direction: Direction;
         disabled?: boolean;
     } = $props();
@@ -117,17 +119,27 @@
                 >
                     1 tx (wrapper)
                 </button>
+            </div>
+
+            <div class="forwarder-row">
+                <span class="forwarder-text">
+                    Circle forwarder ⚗︎
+                    <span class="forwarder-sub">
+                        EXPERIMENTAL — tag the burn so Circle's relayer auto-mints on the
+                        destination (works with either flow above).
+                    </span>
+                </span>
                 <button
                     type="button"
-                    class="chip"
-                    class:active={outboundFlow === 'forwarder'}
+                    class="switch"
+                    class:on={forwarder}
                     {disabled}
-                    onclick={() => (outboundFlow = 'forwarder')}
-                    role="tab"
-                    aria-selected={outboundFlow === 'forwarder'}
-                    title="EXPERIMENTAL: burn with Circle forwarding hookData and watch for the relayer to auto-mint on the EVM side"
+                    role="switch"
+                    aria-checked={forwarder}
+                    aria-label="Use Circle forwarder"
+                    onclick={() => (forwarder = !forwarder)}
                 >
-                    forwarder ⚗︎
+                    <span class="knob"></span>
                 </button>
             </div>
         </div>
@@ -278,5 +290,65 @@
         background: var(--accent-dim);
         color: var(--text);
         border-color: var(--accent);
+    }
+
+    .forwarder-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+    }
+
+    .forwarder-text {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--text);
+    }
+
+    .forwarder-sub {
+        font-size: 0.7rem;
+        font-weight: 400;
+        color: var(--text-dim);
+        line-height: 1.4;
+    }
+
+    .switch {
+        flex: none;
+        width: 2.4rem;
+        height: 1.35rem;
+        padding: 0.15rem;
+        border-radius: 999px;
+        background: var(--bg-elev-2);
+        border: 1px solid var(--border-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        transition: all 120ms;
+    }
+
+    .switch.on {
+        background: var(--accent-dim);
+        border-color: var(--accent);
+        justify-content: flex-end;
+    }
+
+    .switch:disabled {
+        opacity: 0.5;
+    }
+
+    .knob {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        background: var(--text-muted);
+        transition: background 120ms;
+    }
+
+    .switch.on .knob {
+        background: var(--accent);
     }
 </style>

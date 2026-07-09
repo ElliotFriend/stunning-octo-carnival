@@ -97,6 +97,51 @@ export async function bridgeUsdcToEvm(args: {
     return { hash, sourceDomain: STELLAR.domain };
 }
 
+// Wrapper flow + Circle forwarder: the wrapper's `approve_and_deposit_with_hook`
+// mirrors `approve_and_deposit` but forwards a trailing `hook_data` into the
+// inner `deposit_for_burn_with_hook`. One Soroban tx, one Freighter prompt, with
+// the forwarding magic carried through. hookData is the same 32-byte payload the
+// two-tx forwarder path uses.
+export async function bridgeUsdcToEvmWithHook(args: {
+    caller: string;
+    amount: bigint; // Stellar 7-decimal subunits
+    destinationDomain: number;
+    evmRecipient: `0x${string}`;
+    maxFee: bigint;
+    finalityThreshold: number;
+}): Promise<{ hash: string; sourceDomain: number }> {
+    const account = await stellarRpc.getAccount(args.caller);
+
+    const mintRecipient = leftPad32FromHex(args.evmRecipient);
+    const destinationCaller = ZERO_BYTES_32;
+    const hookData = encodeCctpForwardHookData();
+
+    const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: STELLAR.networkPassphrase,
+    })
+        .addOperation(
+            bridgeWrapper.call(
+                'approve_and_deposit_with_hook',
+                Address.fromString(args.caller).toScVal(),
+                Address.fromString(STELLAR.contracts.usdc).toScVal(),
+                Address.fromString(STELLAR.contracts.tokenMessengerMinter).toScVal(),
+                nativeToScVal(args.amount, { type: 'i128' }),
+                nativeToScVal(args.destinationDomain, { type: 'u32' }),
+                bytesN32(mintRecipient),
+                bytesN32(destinationCaller),
+                nativeToScVal(args.maxFee, { type: 'i128' }),
+                nativeToScVal(args.finalityThreshold, { type: 'u32' }),
+                nativeToScVal(hookData, { type: 'bytes' }),
+            ),
+        )
+        .setTimeout(60)
+        .build();
+
+    const hash = await simulateSignAndSubmit(tx);
+    return { hash, sourceDomain: STELLAR.domain };
+}
+
 // ─────────────────────────────────────────────────────────────────────
 //  EXPERIMENTAL — Circle Crosschain Forwarding Service trigger (outbound)
 // ─────────────────────────────────────────────────────────────────────

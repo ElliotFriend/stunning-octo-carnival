@@ -135,23 +135,25 @@ export const EVM_MAX_FEE = 500n;
 
 export type Direction = 'stellar-to-evm' | 'evm-to-stellar';
 
-// On the Stellar→EVM side the user can pick between:
+// On the Stellar→EVM side the user picks a transaction shape:
 //  - 'wrapper'  : one Soroban tx via the bridge wrapper contract (combined
 //                 approve + deposit_for_burn under one Freighter prompt)
 //  - 'two-tx'   : separate `approve` and `deposit_for_burn` invocations,
 //                 same as plain CCTP without the wrapper
-//  - 'forwarder': EXPERIMENTAL — deposit_for_burn_with_hook carrying the Circle
-//                 Crosschain Forwarding Service magic hookData, to probe whether
-//                 Circle's hosted relayer auto-mints on the EVM destination for a
-//                 Stellar-origin burn (Stellar is not a documented forwarder
-//                 source; destination_caller stays zero so a manual mint can
-//                 still recover the funds if the relayer ignores it).
 // Mostly here so the demo can show the flows side-by-side.
-export type OutboundFlow = 'wrapper' | 'two-tx' | 'forwarder';
+export type OutboundFlow = 'wrapper' | 'two-tx';
 // Default to the plain CCTP path so the demo opens on the typical
 // `approve` → `deposit_for_burn` experience. Users can flip to the
 // wrapper-contract flow from the StellarPanel toggle.
 export const DEFAULT_OUTBOUND_FLOW: OutboundFlow = 'two-tx';
+
+// Orthogonal to OutboundFlow: whether to tag the burn with the Circle
+// Crosschain Forwarding Service magic hookData. When on, both the wrapper and
+// two-tx shapes route through the *_with_hook variant so Circle's hosted relayer
+// auto-mints on the EVM destination (Stellar is not a documented forwarder
+// source; destination_caller stays zero so a manual mint can still recover the
+// funds if the relayer ignores it). EXPERIMENTAL.
+export const DEFAULT_FORWARDER = false;
 
 // EVM→Stellar mirror of OutboundFlow. Values:
 //   'two-tx'     plain CCTP — approve, then depositForBurnWithHook.
