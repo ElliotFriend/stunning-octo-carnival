@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env};
+use soroban_sdk::{Address, Bytes, BytesN, Env, contract, contractimpl, token};
 
 mod tmm_interface;
 use crate::tmm_interface::TmmClient;
@@ -38,6 +38,39 @@ impl CctpWrapperContract {
             &destination_caller,
             &max_fee,
             &min_finality_threshold,
+        );
+    }
+
+    pub fn approve_and_deposit_with_hook(
+        env: Env,
+        caller: Address,
+        usdc: Address,
+        tmm: Address,
+        amount: i128,
+        destination_domain: u32,
+        mint_recipient: BytesN<32>,
+        destination_caller: BytesN<32>,
+        max_fee: i128,
+        min_finality_threshold: u32,
+        hook_data: Bytes,
+    ) {
+        caller.require_auth();
+
+        // approve an allowance so the TokenMessengerMinter contract can `transfer_from` our caller address
+        let expiration_ledger = (env.ledger().sequence() + 50).next_multiple_of(50);
+        token::Client::new(&env, &usdc).approve(&caller, &tmm, &amount, &expiration_ledger);
+
+        let tmm_client = TmmClient::new(&env, &tmm);
+        tmm_client.deposit_for_burn_with_hook(
+            &caller,
+            &amount,
+            &destination_domain,
+            &mint_recipient,
+            &usdc,
+            &destination_caller,
+            &max_fee,
+            &min_finality_threshold,
+            &hook_data,
         );
     }
 }
