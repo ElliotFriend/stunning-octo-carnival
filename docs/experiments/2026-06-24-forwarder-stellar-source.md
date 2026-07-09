@@ -1,8 +1,10 @@
 # Experiment: Circle Forwarding Service for a Stellar-origin burn
 
-Date: 2026-06-24
+Date: 2026-06-24 (resolved 2026-07-09)
 Branch: `experiment/forwarder-stellar-source`
-Status: **blocked on Circle** — our implementation is verified correct.
+Status: **RESOLVED** — Circle enabled Stellar-source forwarding; verified working
+end-to-end on 2026-07-09. See [Resolution](#resolution-2026-07-09). Our
+implementation was correct throughout; the gap was entirely Circle-side.
 
 ## Goal
 
@@ -209,3 +211,46 @@ enabled (the relayer watching a Stellar source). Stellar-source Fast is *not* a
 gap to chase — Fast Transfer is moot on a fast-finality chain. Parked until then.
 The Ethereum Sepolia chain addition is a separate, general-purpose commit
 (cherry-pickable onto `main`).
+
+## Resolution (2026-07-09)
+
+Circle stated the forwarder issue "has been fixed." Re-ran the exact same flow
+from the same source account (`GA4XQJFT…`, Stellar domain 27) — two burns,
+Stellar→Arc (26) and Stellar→Base (6), unchanged code. **Both forwarded and
+minted with no manual `receiveMessage`.** Confirmed on-chain on both destinations.
+
+| leg           | burn (source tx)     | amount | nonce        | forwardState | forwardTxHash (dest) | minted → recipient | fee → collector |
+| ------------- | -------------------- | ------ | ------------ | ------------ | -------------------- | ------------------ | --------------- |
+| Stellar→Arc   | `245956ca…5ccd42`    | 5.0    | `0xfed47d…`  | **COMPLETE** | `0x76fbf7d4…215bfd`  | 4.969225           | 0.030775        |
+| Stellar→Base  | `9f6b909c…09e2bf0`   | 5.1    | `0xf7f53f…`  | **COMPLETE** | `0x1d979cfc…909907c` | 4.896013           | 0.203987        |
+
+- recipient (both): `0xb636ce5b2f8959978568a2c9865da750811e273c`
+- fee collector (both): `0xc17d06b66fb2f308bb3af99231a45380a28563a2`
+- Arc mint tx status 1 (USDC `0x3600…0000`, native gas token); Base mint tx
+  status 1 (USDC `0x036CbD…CF7e` on Base Sepolia). Fee math checks out both legs
+  (amount − feeExecuted = minted).
+
+Every structural tell from the third trial has flipped for the Stellar-source
+message — the mirror image of the table in that section:
+
+| field                | 2026-06-24 (ignored) | 2026-07-09 (forwarded) |
+| -------------------- | -------------------- | ---------------------- |
+| `forwardState`       | field absent         | **`COMPLETE`**         |
+| `forwardTxHash`      | absent               | **present** (both legs)|
+| `decodedMessageBody` | `null`               | **fully decoded**      |
+| `feeExecuted`        | 0                    | **= maxFee** (full)    |
+
+Iris now enrolls the Stellar-source burn into the forwarding pipeline and its
+decoder parses the Stellar-source body — both the relayer and parsing layers were
+fixed. `feeExecuted` = full `maxFee` on both legs, consistent with the earlier
+EVM-control finding (the forwarder consumes ~the full cap; size `maxFee` tightly).
+
+One thing to keep an eye on, not a bug: the Base leg's `maxFee` (203987, ~$0.20,
+~4% of a $5.1 transfer) was ~6.6× the Arc leg's (30775, ~0.6%), and `feeExecuted`
+= `maxFee` on both — so any slack in the cap is paid, not refunded. Confirm the
+Base cap is intentionally that much looser than Arc's.
+
+`finalityThresholdExecuted` = 2000 on both, unchanged and expected — Stellar
+attests at finalized (Fast Transfer is N/A on a fast-finality chain).
+
+Follow-up: report the confirmed fix back to Circle in Discord (pending).
