@@ -216,7 +216,7 @@
             await srcPub.waitForTransactionReceipt({ hash: burnHash });
             log(`burned: ${burnHash}`);
 
-            // 4. attestation (informational) — forwarder mints, not us
+            // 4. attestation (informational) — forwarding relayer mints, not us
             log('polling Iris attestation...');
             const attStart = Date.now();
             let attested = false;
@@ -269,7 +269,7 @@
     <h1>Forwarding Service probe (EVM ↔ EVM)</h1>
     <p style="color:#888">
         Throwaway. Tests the Circle forwarding relayer on a route that supports it. Funds: testnet
-        USDC. Forwarder should auto-mint on the destination with no mint tx from you.
+        USDC. Forwarding should auto-mint on the destination with no mint tx from you.
     </p>
 
     {#if !account}

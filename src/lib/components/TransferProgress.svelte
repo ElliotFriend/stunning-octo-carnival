@@ -48,7 +48,7 @@
         'destinationDomain',
         'eventNonce',
         // Forwarding-service lifecycle + attestation-delay reason. Present on
-        // forwarder transfers (and delayReason on any delayed attestation);
+        // forwarding transfers (and delayReason on any delayed attestation);
         // skipped when absent/null so they add no noise to other flows.
         'delayReason',
         'forwardState',

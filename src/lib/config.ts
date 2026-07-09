@@ -150,10 +150,10 @@ export const DEFAULT_OUTBOUND_FLOW: OutboundFlow = 'two-tx';
 // Orthogonal to OutboundFlow: whether to tag the burn with the Circle
 // Crosschain Forwarding Service magic hookData. When on, both the wrapper and
 // two-tx shapes route through the *_with_hook variant so Circle's hosted relayer
-// auto-mints on the EVM destination (Stellar is not a documented forwarder
+// auto-mints on the EVM destination (Stellar is not a documented forwarding
 // source; destination_caller stays zero so a manual mint can still recover the
 // funds if the relayer ignores it). EXPERIMENTAL.
-export const DEFAULT_FORWARDER = false;
+export const DEFAULT_FORWARDING = false;
 
 // EVM→Stellar mirror of OutboundFlow. Values:
 //   'two-tx'     plain CCTP — approve, then depositForBurnWithHook.

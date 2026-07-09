@@ -26,7 +26,7 @@
         evmChainId,
         amount,
         outboundFlow,
-        forwarder,
+        forwarding,
         speed,
     }: {
         stellarAddress: string;
@@ -34,7 +34,7 @@
         evmChainId: EvmChainId;
         amount: string;
         outboundFlow: OutboundFlow;
-        forwarder: boolean;
+        forwarding: boolean;
         speed: TransferSpeed;
     } = $props();
 
@@ -63,10 +63,10 @@
     let threshold = $derived(thresholdFor(speed));
 
     // The wrapper exposes extra args ahead of the burn args (usdc + tmm routing
-    // addresses); the two-tx shape calls the TMM directly. The forwarder toggle
+    // addresses); the two-tx shape calls the TMM directly. The forwarding toggle
     // is orthogonal — it routes either shape through the *_with_hook variant.
     let isWrapper = $derived(outboundFlow === 'wrapper');
-    let isForwarder = $derived(forwarder);
+    let isForwarding = $derived(forwarding);
 
     let contractAddress = $derived(
         isWrapper ? STELLAR.contracts.bridgeWrapper : STELLAR.contracts.tokenMessengerMinter,
@@ -75,16 +75,16 @@
         isWrapper ? 'CctpWrapper (user-deployed)' : 'TokenMessengerMinter',
     );
     // Inner burn call the wrapper makes (also the auth-tree function name).
-    let innerBurnFn = $derived(isForwarder ? 'deposit_for_burn_with_hook' : 'deposit_for_burn');
+    let innerBurnFn = $derived(isForwarding ? 'deposit_for_burn_with_hook' : 'deposit_for_burn');
     let functionName = $derived(
         isWrapper
-            ? isForwarder
+            ? isForwarding
                 ? 'approve_and_deposit_with_hook'
                 : 'approve_and_deposit'
             : innerBurnFn,
     );
 
-    // Forwarder maxFee comes from the ?forward=true quote (protocol fee +
+    // Forwarding maxFee comes from the ?forward=true quote (protocol fee +
     // forwarding service fee), keyed by route so it re-runs on chain change only.
     let forwardFeePromise = $derived(fetchForwardFee(STELLAR.domain, destDomain));
 
@@ -146,9 +146,9 @@
             is sufficient).
         </p>
     {/if}
-    {#if isForwarder}
+    {#if isForwarding}
         <p class="flow-note">
-            Forwarder on (experimental) — the <code>hook_data</code> below tags the burn for Circle's
+            Forwarding on (experimental) — the <code>hook_data</code> below tags the burn for Circle's
             forwarding relayer, which auto-mints on the destination and deducts its fee from the minted
             USDC (no destination gas from you).
         </p>
@@ -231,7 +231,7 @@
         <li class="row">
             <span class="arg-name">max_fee</span>
             <span class="arg-type">i128</span>
-            {#if isForwarder}
+            {#if isForwarding}
                 {#await forwardFeePromise then rows}
                     <code class="arg-value">
                         {forwardedMaxFeeStellar(
@@ -275,7 +275,7 @@
             </span>
         </li>
 
-        {#if isForwarder}
+        {#if isForwarding}
             <li class="row wide">
                 <span class="arg-name">hook_data</span>
                 <span class="arg-type">Bytes</span>
@@ -392,7 +392,7 @@
                         <li>
                             <span class="arg-name">max_fee</span>
                             <span class="arg-type">i128</span>
-                            {#if isForwarder}
+                            {#if isForwarding}
                                 {#await forwardFeePromise then rows}
                                     <code class="arg-value">
                                         {forwardedMaxFeeStellar(
@@ -427,7 +427,7 @@
                             <code class="arg-value">{threshold}</code>
                             <span class="arg-note">{speed === 'fast' ? 'fast' : 'finalized'}</span>
                         </li>
-                        {#if isForwarder}
+                        {#if isForwarding}
                             <li class="wide">
                                 <span class="arg-name">hook_data</span>
                                 <span class="arg-type">Bytes</span>

@@ -14,7 +14,7 @@
     import type { SendCallsCapability } from '$lib/evm/capabilities';
     import {
         DEFAULT_EVM_CHAIN,
-        DEFAULT_FORWARDER,
+        DEFAULT_FORWARDING,
         DEFAULT_INBOUND_FLOW,
         DEFAULT_OUTBOUND_FLOW,
         DEFAULT_SPEED,
@@ -35,7 +35,7 @@
     let evmChainId = $state<EvmChainId>(DEFAULT_EVM_CHAIN);
     let direction = $state<Direction>('stellar-to-evm');
     let outboundFlow = $state<OutboundFlow>(DEFAULT_OUTBOUND_FLOW);
-    let forwarder = $state<boolean>(DEFAULT_FORWARDER);
+    let forwarding = $state<boolean>(DEFAULT_FORWARDING);
     let inboundFlow = $state<InboundFlow>(DEFAULT_INBOUND_FLOW);
     let sendCallsCap = $state<SendCallsCapability>({ supported: false, atomic: false });
     let amount = $state('');
@@ -50,7 +50,7 @@
         'stellar-to-evm',
         DEFAULT_EVM_CHAIN,
         DEFAULT_OUTBOUND_FLOW,
-        DEFAULT_FORWARDER,
+        DEFAULT_FORWARDING,
         DEFAULT_INBOUND_FLOW,
     );
 
@@ -80,7 +80,7 @@
             evmWallet: evm,
             evmChainId,
             outboundFlow,
-            forwarder,
+            forwarding,
             inboundFlow,
             amount: amount.trim(),
             speed: effectiveSpeed,
@@ -126,7 +126,7 @@
             bind:this={stellarPanel}
             bind:freighter={stellar}
             bind:outboundFlow
-            bind:forwarder
+            bind:forwarding
             {direction}
             disabled={busy}
         />
@@ -178,7 +178,7 @@
                 {evmChainId}
                 {amount}
                 {outboundFlow}
-                {forwarder}
+                {forwarding}
                 speed={effectiveSpeed}
             />
         {/if}

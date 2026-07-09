@@ -97,11 +97,11 @@ export async function bridgeUsdcToEvm(args: {
     return { hash, sourceDomain: STELLAR.domain };
 }
 
-// Wrapper flow + Circle forwarder: the wrapper's `approve_and_deposit_with_hook`
+// Wrapper flow + Circle forwarding: the wrapper's `approve_and_deposit_with_hook`
 // mirrors `approve_and_deposit` but forwards a trailing `hook_data` into the
 // inner `deposit_for_burn_with_hook`. One Soroban tx, one Freighter prompt, with
 // the forwarding magic carried through. hookData is the same 32-byte payload the
-// two-tx forwarder path uses.
+// two-tx forwarding path uses.
 export async function bridgeUsdcToEvmWithHook(args: {
     caller: string;
     amount: bigint; // Stellar 7-decimal subunits
@@ -155,7 +155,7 @@ export async function bridgeUsdcToEvmWithHook(args: {
 //   bytes 24–27: u32 version (0)
 //   bytes 28–31: u32 length of additional Circle hook data (0 — none here)
 //
-// Stellar is NOT a documented forwarder source; this probes whether the relayer
+// Stellar is NOT a documented forwarding source; this probes whether the relayer
 // picks it up regardless. destination_caller is left ZERO (permissionless) so if
 // the relayer ignores the burn, the mint can still be completed manually via
 // receiveMessage (the demo's resume flow) — funds are never stranded.

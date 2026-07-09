@@ -12,13 +12,13 @@
             networkPassphrase: null,
         }),
         outboundFlow = $bindable<OutboundFlow>('two-tx'),
-        forwarder = $bindable<boolean>(false),
+        forwarding = $bindable<boolean>(false),
         direction,
         disabled = false,
     }: {
         freighter?: FreighterState;
         outboundFlow?: OutboundFlow;
-        forwarder?: boolean;
+        forwarding?: boolean;
         direction: Direction;
         disabled?: boolean;
     } = $props();
@@ -121,10 +121,10 @@
                 </button>
             </div>
 
-            <div class="forwarder-row">
-                <span class="forwarder-text">
-                    Circle forwarder ⚗︎
-                    <span class="forwarder-sub">
+            <div class="forwarding-row">
+                <span class="forwarding-text">
+                    Circle forwarding ⚗︎
+                    <span class="forwarding-sub">
                         EXPERIMENTAL — tag the burn so Circle's relayer auto-mints on the
                         destination (works with either flow above).
                     </span>
@@ -132,12 +132,12 @@
                 <button
                     type="button"
                     class="switch"
-                    class:on={forwarder}
+                    class:on={forwarding}
                     {disabled}
                     role="switch"
-                    aria-checked={forwarder}
-                    aria-label="Use Circle forwarder"
-                    onclick={() => (forwarder = !forwarder)}
+                    aria-checked={forwarding}
+                    aria-label="Use Circle forwarding"
+                    onclick={() => (forwarding = !forwarding)}
                 >
                     <span class="knob"></span>
                 </button>
@@ -292,7 +292,7 @@
         border-color: var(--accent);
     }
 
-    .forwarder-row {
+    .forwarding-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -300,7 +300,7 @@
         margin-top: 0.5rem;
     }
 
-    .forwarder-text {
+    .forwarding-text {
         display: flex;
         flex-direction: column;
         gap: 0.15rem;
@@ -309,7 +309,7 @@
         color: var(--text);
     }
 
-    .forwarder-sub {
+    .forwarding-sub {
         font-size: 0.7rem;
         font-weight: 400;
         color: var(--text-dim);
