@@ -25,24 +25,29 @@
 ### Task 1: Dependencies + Kit RPC client
 
 **Files:**
+
 - Modify: `package.json` (deps added by pnpm)
 - Create: `src/lib/solana/client.ts`
 
 **Interfaces:**
+
 - Consumes: `SOLANA.rpcUrl` from `src/lib/config.ts`.
 - Produces: `solanaRpc` — a Kit RPC client used by `solana/usdc.ts`.
 
 - [ ] **Step 1: Install dependencies**
 
 Run:
+
 ```bash
 pnpm add @solana/kit @solana-program/token @wallet-standard/app @wallet-standard/base
 ```
-Expected: four packages added to `dependencies` in `package.json`, lockfile updated. Peer-dep *warnings* (e.g. `@solana-program/token` wanting a specific `@solana/kit` range) are acceptable; only a hard resolution error should block.
+
+Expected: four packages added to `dependencies` in `package.json`, lockfile updated. Peer-dep _warnings_ (e.g. `@solana-program/token` wanting a specific `@solana/kit` range) are acceptable; only a hard resolution error should block.
 
 - [ ] **Step 2: Create the RPC client**
 
 Create `src/lib/solana/client.ts`:
+
 ```ts
 import { createSolanaRpc } from '@solana/kit';
 import { SOLANA } from '$lib/config';
@@ -69,15 +74,18 @@ git commit -m "feat: add Solana Kit deps + devnet RPC client"
 ### Task 2: USDC balance via ATA
 
 **Files:**
+
 - Create: `src/lib/solana/usdc.ts`
 
 **Interfaces:**
+
 - Consumes: `solanaRpc` from `solana/client.ts`; `SOLANA.usdc.mint` from config; `address`/`createSolanaRpc` types from `@solana/kit`; `findAssociatedTokenPda`, `TOKEN_PROGRAM_ADDRESS` from `@solana-program/token`.
 - Produces: `getUsdcBalance(owner: string): Promise<string>` — returns a decimal UI string (e.g. `"12.5"`), `"0"` when the owner has no USDC token account yet.
 
 - [ ] **Step 1: Implement `getUsdcBalance`**
 
 Create `src/lib/solana/usdc.ts`:
+
 ```ts
 import { address } from '@solana/kit';
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
@@ -123,20 +131,23 @@ Note: real exercise of this function happens in Task 4 (needs a funded devnet ad
 ### Task 3: Wallet Standard discovery + connect
 
 **Files:**
+
 - Create: `src/lib/solana/wallet.ts`
 
 **Interfaces:**
+
 - Consumes: `getWallets` from `@wallet-standard/app`; `Wallet` type from `@wallet-standard/base`; `browser` from `$app/environment`; `sleep` from `$lib/utils`.
 - Produces:
-  - `type SolanaWalletInfo = { name: string; icon: string; wallet: Wallet }`
-  - `type SolanaWallet = { name: string; icon: string; address: string }`
-  - `discoverSolanaWallets(): SolanaWalletInfo[]`
-  - `connectSolana(info: SolanaWalletInfo): Promise<SolanaWallet>`
-  - `detectExistingSolana(): Promise<SolanaWallet | null>`
+    - `type SolanaWalletInfo = { name: string; icon: string; wallet: Wallet }`
+    - `type SolanaWallet = { name: string; icon: string; address: string }`
+    - `discoverSolanaWallets(): SolanaWalletInfo[]`
+    - `connectSolana(info: SolanaWalletInfo): Promise<SolanaWallet>`
+    - `detectExistingSolana(): Promise<SolanaWallet | null>`
 
 - [ ] **Step 1: Implement the wallet module**
 
 Create `src/lib/solana/wallet.ts`:
+
 ```ts
 import { browser } from '$app/environment';
 import { getWallets } from '@wallet-standard/app';
@@ -255,16 +266,19 @@ git commit -m "feat: Solana wallet discovery + connect via Wallet Standard"
 ### Task 4: Spike panel + route + end-to-end verification
 
 **Files:**
+
 - Create: `src/lib/components/SolanaPanel.svelte`
 - Create: `src/routes/solana-spike/+page.svelte`
 
 **Interfaces:**
+
 - Consumes: `connectSolana`, `detectExistingSolana`, `discoverSolanaWallets`, `SolanaWallet` from `solana/wallet.ts`; `getUsdcBalance` from `solana/usdc.ts`; `shortAddr(addr, head?, tail?)` from `$lib/utils`.
 - Produces: a browsable `/solana-spike` page.
 
 - [ ] **Step 1: Create the panel**
 
 Create `src/lib/components/SolanaPanel.svelte`:
+
 ```svelte
 <script lang="ts">
     import { onMount } from 'svelte';
@@ -310,9 +324,12 @@ Create `src/lib/components/SolanaPanel.svelte`:
         try {
             const wallets = discoverSolanaWallets();
             if (wallets.length === 0) {
-                throw new Error('No Solana wallet found. Install Phantom from phantom.app and reload.');
+                throw new Error(
+                    'No Solana wallet found. Install Phantom from phantom.app and reload.',
+                );
             }
-            const pick = wallets.find((w) => w.name.toLowerCase().includes('phantom')) ?? wallets[0];
+            const pick =
+                wallets.find((w) => w.name.toLowerCase().includes('phantom')) ?? wallets[0];
             wallet = await connectSolana(pick);
             await refreshBalance();
         } catch (e) {
@@ -358,6 +375,7 @@ Run the `svelte-autofixer` MCP tool on `src/lib/components/SolanaPanel.svelte`. 
 - [ ] **Step 3: Create the route**
 
 Create `src/routes/solana-spike/+page.svelte`:
+
 ```svelte
 <script lang="ts">
     import SolanaPanel from '$lib/components/SolanaPanel.svelte';

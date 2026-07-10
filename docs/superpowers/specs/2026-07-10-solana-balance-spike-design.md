@@ -51,12 +51,12 @@ Isolated under a throwaway route `src/routes/solana-spike/+page.svelte`
 (mirrors the existing experimental `forward-test` route). Nothing in the main
 page changes.
 
-| File | Parallels | Responsibility |
-|------|-----------|----------------|
-| `src/lib/solana/client.ts` | `stellar/client.ts` | `export const solanaRpc = createSolanaRpc(SOLANA.rpcUrl)` |
-| `src/lib/solana/wallet.ts` | `evm/wallet.ts` | `SolanaWallet` type; `discoverSolanaWallets()` (filter to `solana:`-capable wallets); `connectSolana(info)` (invoke `standard:connect`, take `accounts[0]`); `detectExistingSolana()` (silent reconnect keyed on a stored wallet name, like EVM's stored-rdns) |
-| `src/lib/solana/usdc.ts` | `stellar/usdc.ts` | `getUsdcBalance(owner)` — derive ATA from (owner, mint), call `solanaRpc.getTokenAccountBalance`; format helpers |
-| `src/lib/components/SolanaPanel.svelte` | `StellarPanel.svelte` | Connect button → show address + USDC balance. Throwaway. |
+| File                                    | Parallels             | Responsibility                                                                                                                                                                                                                                                 |
+| --------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/solana/client.ts`              | `stellar/client.ts`   | `export const solanaRpc = createSolanaRpc(SOLANA.rpcUrl)`                                                                                                                                                                                                      |
+| `src/lib/solana/wallet.ts`              | `evm/wallet.ts`       | `SolanaWallet` type; `discoverSolanaWallets()` (filter to `solana:`-capable wallets); `connectSolana(info)` (invoke `standard:connect`, take `accounts[0]`); `detectExistingSolana()` (silent reconnect keyed on a stored wallet name, like EVM's stored-rdns) |
+| `src/lib/solana/usdc.ts`                | `stellar/usdc.ts`     | `getUsdcBalance(owner)` — derive ATA from (owner, mint), call `solanaRpc.getTokenAccountBalance`; format helpers                                                                                                                                               |
+| `src/lib/components/SolanaPanel.svelte` | `StellarPanel.svelte` | Connect button → show address + USDC balance. Throwaway.                                                                                                                                                                                                       |
 
 ## Data flow
 
