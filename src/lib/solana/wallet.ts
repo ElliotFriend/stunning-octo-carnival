@@ -16,6 +16,10 @@ export type SolanaWallet = {
     icon: string;
     address: string;
     account: WalletAccount;
+    // The Wallet Standard wallet — feature *implementations* (e.g.
+    // solana:signTransaction) live here, not on the account (whose `features`
+    // is only a list of supported feature names).
+    standardWallet: Wallet;
 };
 
 // Minimal shape of the standard:connect feature. Kept local rather than
@@ -68,6 +72,7 @@ export async function connectSolana(info: SolanaWalletInfo): Promise<SolanaWalle
         icon: info.icon,
         address: accounts[0].address,
         account: accounts[0],
+        standardWallet: info.wallet,
     };
 }
 
@@ -101,6 +106,7 @@ export async function detectExistingSolana(): Promise<SolanaWallet | null> {
             icon: info.icon,
             address: accounts[0].address,
             account: accounts[0],
+            standardWallet: info.wallet,
         };
     } catch {
         return null;

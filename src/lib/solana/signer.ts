@@ -53,7 +53,8 @@ export async function signAndSendBurnTx(args: {
     const partiallySigned = await partiallySignTransactionMessageWithSigners(message);
     const wireUnsigned = new Uint8Array(getTransactionEncoder().encode(partiallySigned));
 
-    const features = wallet.account.features as unknown as Record<string, unknown>;
+    // Feature implementations live on the Wallet, not the account.
+    const features = wallet.standardWallet.features as unknown as Record<string, unknown>;
     const signFeature = features['solana:signTransaction'] as SignTransactionFeature | undefined;
     if (!signFeature) throw new Error('Wallet does not support solana:signTransaction.');
 
