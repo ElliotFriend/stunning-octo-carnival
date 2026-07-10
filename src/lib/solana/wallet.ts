@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
 import { getWallets } from '@wallet-standard/app';
-import type { Wallet } from '@wallet-standard/base';
+import type { Wallet, WalletAccount } from '@wallet-standard/base';
 import { sleep } from '$lib/utils';
 
 const NAME_STORAGE_KEY = 'cctp-demo:solana-wallet';
@@ -15,14 +15,14 @@ export type SolanaWallet = {
     name: string;
     icon: string;
     address: string;
+    account: WalletAccount;
 };
 
 // Minimal shape of the standard:connect feature. Kept local rather than
 // pulling @wallet-standard/features just for the type — mirrors how
 // evm/wallet.ts keeps its EIP-6963 types local.
-type ConnectableAccount = { address: string };
 type ConnectFeature = {
-    connect: (input?: { silent?: boolean }) => Promise<{ accounts: readonly ConnectableAccount[] }>;
+    connect: (input?: { silent?: boolean }) => Promise<{ accounts: readonly WalletAccount[] }>;
 };
 
 function isSolana(w: Wallet): boolean {
@@ -63,7 +63,12 @@ export async function connectSolana(info: SolanaWalletInfo): Promise<SolanaWalle
     const { accounts } = await connectFeature(info.wallet).connect();
     if (accounts.length === 0) throw new Error('Wallet returned no accounts.');
     writeStoredName(info.name);
-    return { name: info.name, icon: info.icon, address: accounts[0].address };
+    return {
+        name: info.name,
+        icon: info.icon,
+        address: accounts[0].address,
+        account: accounts[0],
+    };
 }
 
 // Silent reconnect: standard:connect with { silent: true } asks the wallet to
@@ -91,7 +96,12 @@ export async function detectExistingSolana(): Promise<SolanaWallet | null> {
     try {
         const { accounts } = await connectFeature(info.wallet).connect({ silent: true });
         if (accounts.length === 0) return null;
-        return { name: info.name, icon: info.icon, address: accounts[0].address };
+        return {
+            name: info.name,
+            icon: info.icon,
+            address: accounts[0].address,
+            account: accounts[0],
+        };
     } catch {
         return null;
     }
