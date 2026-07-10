@@ -3,6 +3,13 @@ import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from '@solana-program/t
 import { SOLANA } from '$lib/config';
 import { solanaRpc } from './client';
 
+// "5" / "5.25" → 6-dp USDC subunits (5_000000n / 5_250000n).
+export function parseUsdcSolana(amount: string): bigint {
+    const [whole, frac = ''] = amount.trim().split('.');
+    const fracPadded = (frac + '000000').slice(0, 6);
+    return BigInt(whole || '0') * 1_000_000n + BigInt(fracPadded || '0');
+}
+
 // Devnet USDC uses the classic SPL Token program (not Token-2022), so
 // TOKEN_PROGRAM_ADDRESS is the correct token-program seed for the ATA.
 export async function getUsdcBalance(owner: string): Promise<string> {

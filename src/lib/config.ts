@@ -151,8 +151,10 @@ export const DEFAULT_SPEED: TransferSpeed = 'standard';
 //       500      =  $0.0005
 export const STELLAR_MAX_FEE = 100_000n;
 export const EVM_MAX_FEE = 500n;
+// Solana USDC is 6-dp like EVM, so the same 500n (≈ $0.0005) buffer applies.
+export const SOLANA_MAX_FEE = 500n;
 
-export type Direction = 'stellar-to-evm' | 'evm-to-stellar';
+export type Direction = 'stellar-to-evm' | 'evm-to-stellar' | 'solana-to-stellar';
 
 // On the Stellar→EVM side the user picks a transaction shape:
 //  - 'wrapper'  : one Soroban tx via the bridge wrapper contract (combined
