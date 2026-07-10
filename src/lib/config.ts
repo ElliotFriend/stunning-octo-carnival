@@ -23,6 +23,25 @@ export const STELLAR = {
     },
 } as const;
 
+// Solana CCTP V2. Program IDs are deterministic — identical on devnet and
+// mainnet — so only the cluster + USDC mint differ. Domain 5. This demo only
+// bridges Solana <-> Stellar, so Solana is both a burn source and a mint
+// destination but never pairs with the EVM chains.
+export const SOLANA = {
+    cluster: 'devnet',
+    rpcUrl: 'https://api.devnet.solana.com',
+    domain: 5,
+    explorer: 'https://explorer.solana.com', // append ?cluster=devnet to links
+    programs: {
+        messageTransmitterV2: 'CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbeC',
+        tokenMessengerMinterV2: 'CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe',
+    },
+    usdc: {
+        mint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+        decimals: 6,
+    },
+} as const;
+
 // CCTP V2 deploys to the same addresses on every supported EVM chain via
 // deterministic deployment, so these are constants — only USDC and the
 // chain/domain differ per chain.
