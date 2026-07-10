@@ -10,8 +10,27 @@
     import { getUsdcBalance } from '$lib/solana/usdc';
     import { shortAddr } from '$lib/utils';
 
-    let { wallet = $bindable<SolanaWallet | null>(null) }: { wallet?: SolanaWallet | null } =
-        $props();
+    type StepView = {
+        key: string;
+        label: string;
+        status: string;
+        hashUrl?: string;
+        detail?: string;
+    };
+
+    let {
+        wallet = $bindable<SolanaWallet | null>(null),
+        amount = $bindable('5'),
+        recipient = $bindable(''),
+        onBurn,
+        steps = [],
+    }: {
+        wallet?: SolanaWallet | null;
+        amount?: string;
+        recipient?: string;
+        onBurn?: () => void;
+        steps?: StepView[];
+    } = $props();
 
     let balance = $state<string | null>(null);
     let error = $state<string | null>(null);
@@ -69,6 +88,23 @@
         <p><code title={wallet.address}>{shortAddr(wallet.address, 6, 6)}</code></p>
         <p>USDC: {balance ?? '…'}</p>
         <button onclick={refreshBalance}>Refresh</button>
+        <hr />
+        <label>Amount USDC <input bind:value={amount} /></label>
+        <label>Stellar recipient (G…) <input bind:value={recipient} /></label>
+        <button onclick={() => onBurn?.()}>Burn → Stellar</button>
+        {#if steps.length}
+            <ul class="steps">
+                {#each steps as s (s.key)}
+                    <li>
+                        {s.label}: <strong>{s.status}</strong>
+                        {#if s.detail}<span class="detail"> ({s.detail})</span>{/if}
+                        {#if s.hashUrl}<a href={s.hashUrl} target="_blank" rel="external noreferrer"
+                                >tx</a
+                            >{/if}
+                    </li>
+                {/each}
+            </ul>
+        {/if}
     {/if}
     {#if error}<p class="error">{error}</p>{/if}
 </div>
@@ -82,5 +118,20 @@
     }
     .error {
         color: crimson;
+    }
+    label {
+        display: block;
+        margin: 0.5rem 0;
+    }
+    input {
+        width: 100%;
+    }
+    .steps {
+        margin-top: 0.75rem;
+        padding-left: 1rem;
+        font-size: 0.9rem;
+    }
+    .detail {
+        opacity: 0.7;
     }
 </style>
