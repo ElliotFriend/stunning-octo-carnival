@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { encodeStellarForwarderHookData } from '$lib/evm/cctp';
+    import { encodeStellarForwarderHookData } from '$lib/stellar/recipient';
 
     let { stellarRecipient }: { stellarRecipient: string } = $props();
 

@@ -9,7 +9,7 @@
         type TransferSpeed,
     } from '$lib/config';
     import { fetchBurnFee, feeBpsFor, thresholdFor, computeMaxFee } from '$lib/circle/fees';
-    import { encodeStellarForwarderHookData, strkeyToBytes32 } from '$lib/evm/cctp';
+    import { encodeStellarForwarderHookData, strkeyToBytes32 } from '$lib/stellar/recipient';
     import {
         fetchUsdcEip712Domain,
         formatEvmUsdc,
