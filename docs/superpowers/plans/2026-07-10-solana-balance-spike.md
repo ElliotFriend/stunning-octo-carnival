@@ -39,10 +39,12 @@
 Run:
 
 ```bash
-pnpm add @solana/kit @solana-program/token @wallet-standard/app @wallet-standard/base
+pnpm add '@solana/kit@^6.5.0' @solana-program/token @wallet-standard/app @wallet-standard/base
 ```
 
-Expected: four packages added to `dependencies` in `package.json`, lockfile updated. Peer-dep _warnings_ (e.g. `@solana-program/token` wanting a specific `@solana/kit` range) are acceptable; only a hard resolution error should block.
+**Pin Kit to `^6.5.0`** — `@solana-program/token@0.14.0` declares `peerDependencies: { "@solana/kit": "^6.5.0" }`. Installing bare `@solana/kit` pulls the latest major (7.x), which drops `getMinimumBalanceForRentExemption` from its browser entry — token imports it, so `vite dev` crashes at dependency optimization with `[MISSING_EXPORT]` even though `pnpm check` passes. Typecheck does NOT catch this; only running the dev server does.
+
+Expected: four packages in `dependencies`, lockfile updated, and the resolved `@solana/kit` is a 6.x (e.g. 6.10.0). A residual peer warning is acceptable; a `MISSING_EXPORT` at dev-server start is not.
 
 - [ ] **Step 2: Create the RPC client**
 
