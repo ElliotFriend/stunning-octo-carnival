@@ -2,6 +2,8 @@ import { hexToBytes, type Hex } from 'viem';
 import {
     EVM_CCTP_CONTRACTS,
     EVM_CHAINS,
+    SOLANA,
+    SOLANA_MAX_FEE,
     STELLAR,
     STELLAR_MAX_FEE,
     EVM_MAX_FEE,
@@ -11,6 +13,9 @@ import {
     type OutboundFlow,
     type TransferSpeed,
 } from '$lib/config';
+import { burnUsdcToStellar } from '$lib/solana/cctp';
+import { parseUsdcSolana } from '$lib/solana/usdc';
+import type { SolanaWallet } from '$lib/solana/wallet';
 import {
     fetchBurnFee,
     feeBpsFor,
@@ -120,6 +125,15 @@ function stepsFor(
         steps.push({ key: 'attest', label: 'Wait for Circle attestation', status: 'pending' });
         steps.push(mintStep);
         return steps;
+    }
+    if (direction === 'solana-to-stellar') {
+        // No approve step: Solana deposit_for_burn burns under the owner's
+        // signature via CPI. Mints on Stellar through the forwarder.
+        return [
+            { key: 'burn', label: 'Burn USDC on Solana', status: 'pending' },
+            { key: 'attest', label: 'Wait for Circle attestation', status: 'pending' },
+            { key: 'mint', label: 'Mint USDC on Stellar (forwarder)', status: 'pending' },
+        ];
     }
     if (inboundFlow === 'wrapper') {
         return [
@@ -621,6 +635,69 @@ export function createTransferStore(
         state.phase = 'done';
     }
 
+    // Solana → Stellar. Mirrors runEvmToStellar minus the approve step: Solana
+    // deposit_for_burn burns under the owner's signature in one tx, then Circle
+    // attests and the forwarder mints on Stellar. stellarAddress signs/pays the
+    // Stellar mint; stellarRecipient is the G-address carried in the burn hook.
+    async function runSolanaToStellar(args: {
+        stellarAddress: string;
+        stellarRecipient: string;
+        solanaWallet: SolanaWallet;
+        amount: string;
+        speed: TransferSpeed;
+    }) {
+        state.amount = args.amount;
+        const solAmount = parseUsdcSolana(args.amount);
+
+        const burnHash = await performStep('burning', 'burn', async () => {
+            const feeRows = await fetchBurnFee(SOLANA.domain, STELLAR.domain);
+            const maxFee = computeMaxFee(solAmount, feeBpsFor(feeRows, args.speed), SOLANA_MAX_FEE);
+            const { signature } = await burnUsdcToStellar({
+                wallet: args.solanaWallet,
+                amount: solAmount,
+                stellarRecipient: args.stellarRecipient,
+                maxFee,
+                minFinalityThreshold: thresholdFor(args.speed),
+            });
+            return {
+                result: signature,
+                patch: {
+                    hash: signature,
+                    hashUrl: `${SOLANA.explorer}/tx/${signature}?cluster=devnet`,
+                },
+            };
+        });
+        if (burnHash === null) return;
+
+        const attest = await performStep<IrisMessage>('attesting', 'attest', async () => {
+            const msg = await pollAttestation(SOLANA.domain, burnHash, {
+                onProgress: ({ elapsedMs, status }) => {
+                    patchStep('attest', {
+                        detail: `${Math.round(elapsedMs / 1000)}s — ${status}`,
+                    });
+                },
+            });
+            return { result: msg };
+        });
+        if (attest === null) return;
+        state.attestation = attest;
+
+        const mintHash = await performStep('minting', 'mint', async () => {
+            const r = await mintAndForward({
+                caller: args.stellarAddress,
+                message: hexToBytes(attest.message as Hex),
+                attestation: hexToBytes(attest.attestation as Hex),
+            });
+            return {
+                result: r.hash,
+                patch: { hash: r.hash, hashUrl: stellarTxUrl(r.hash) },
+            };
+        });
+        if (mintHash === null) return;
+
+        state.phase = 'done';
+    }
+
     async function start(args: {
         direction: Direction;
         stellarAddress: string;
@@ -631,6 +708,8 @@ export function createTransferStore(
         inboundFlow: InboundFlow;
         amount: string;
         speed: TransferSpeed;
+        solanaWallet?: SolanaWallet;
+        stellarRecipient?: string;
     }) {
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
@@ -650,6 +729,15 @@ export function createTransferStore(
         try {
             if (args.direction === 'stellar-to-evm') {
                 await runStellarToEvm(args);
+            } else if (args.direction === 'solana-to-stellar') {
+                if (!args.solanaWallet) throw new Error('Solana wallet not connected.');
+                await runSolanaToStellar({
+                    stellarAddress: args.stellarAddress,
+                    stellarRecipient: args.stellarRecipient ?? args.stellarAddress,
+                    solanaWallet: args.solanaWallet,
+                    amount: args.amount,
+                    speed: args.speed,
+                });
             } else {
                 await runEvmToStellar(args);
             }
