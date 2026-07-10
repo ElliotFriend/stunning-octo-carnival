@@ -18,3 +18,8 @@ contracts/evm/cctp-wrapper/broadcast/
 .claude/
 
 .superpowers/
+
+# Codama-generated Solana CCTP client (regenerate via pnpm gen:solana-cctp)
+src/lib/solana/generated/
+# Fetched Anchor IDL (source input for codegen)
+idl/

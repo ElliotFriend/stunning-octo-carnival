@@ -12,6 +12,9 @@ const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 
 export default defineConfig(
     includeIgnoreFile(gitignorePath),
+    // Codama-generated Solana CCTP client — committed but not hand-maintained,
+    // so it's exempt from lint (regenerate via `pnpm gen:solana-cctp`).
+    { ignores: ['src/lib/solana/generated/**'] },
     js.configs.recommended,
     ts.configs.recommended,
     svelte.configs.recommended,
