@@ -33,20 +33,24 @@ rmSync(TMP, { recursive: true, force: true });
 // '@solana/kit/program-client-core'. Rewrite the import so our src typechecks
 // against Kit's bundled version (the same trick @solana-program/token uses)
 // instead of forcing a conflicting top-level @solana/program-client-core@7.
-function remapCore(dir) {
+function patchGenerated(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const p = join(dir, entry.name);
-        if (entry.isDirectory()) remapCore(p);
+        if (entry.isDirectory()) patchGenerated(p);
         else if (entry.name.endsWith('.ts')) {
             const src = readFileSync(p, 'utf8');
-            const fixed = src.replaceAll(
-                "'@solana/program-client-core'",
-                "'@solana/kit/program-client-core'",
-            );
+            const fixed = src
+                // Resolve the runtime helper against Kit's re-exported subpath
+                // (our pinned Kit 6.10) instead of the conflicting standalone v7.
+                .replaceAll("'@solana/program-client-core'", "'@solana/kit/program-client-core'")
+                // Codama guards dev-only error messages with `process.env.NODE_ENV`,
+                // a Node-ism that throws in the browser. Keep the messages always
+                // on (fine for a demo) so the generated code never touches process.
+                .replaceAll("process.env['NODE_ENV'] !== 'production'", 'true');
             if (fixed !== src) writeFileSync(p, fixed);
         }
     }
 }
-remapCore(OUT);
+patchGenerated(OUT);
 
 console.log(`Generated Solana CCTP client → ${OUT}`);

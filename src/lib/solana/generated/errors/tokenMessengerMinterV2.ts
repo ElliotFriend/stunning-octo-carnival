@@ -31,12 +31,12 @@ export const TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_AMOUNT = 0x1778; // 6008
 export type TokenMessengerMinterV2Error = typeof TOKEN_MESSENGER_MINTER_V2_ERROR__BURN_AMOUNT_EXCEEDED | typeof TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_AMOUNT | typeof TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_AUTHORITY | typeof TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_LOCAL_TOKEN_STATE | typeof TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_PAUSER | typeof TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_TOKEN_CONTROLLER | typeof TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_TOKEN_MINTER_STATE | typeof TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_TOKEN_PAIR_STATE | typeof TOKEN_MESSENGER_MINTER_V2_ERROR__PROGRAM_PAUSED;
 
 let tokenMessengerMinterV2ErrorMessages: Record<TokenMessengerMinterV2Error, string> | undefined;
-if (process.env['NODE_ENV'] !== 'production') {
+if (true) {
   tokenMessengerMinterV2ErrorMessages = { [TOKEN_MESSENGER_MINTER_V2_ERROR__BURN_AMOUNT_EXCEEDED]: `Burn amount exceeded`, [TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_AMOUNT]: `Invalid amount`, [TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_AUTHORITY]: `Invalid authority`, [TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_LOCAL_TOKEN_STATE]: `Invalid local token state`, [TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_PAUSER]: `Invalid pauser`, [TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_TOKEN_CONTROLLER]: `Invalid token controller`, [TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_TOKEN_MINTER_STATE]: `Invalid token minter state`, [TOKEN_MESSENGER_MINTER_V2_ERROR__INVALID_TOKEN_PAIR_STATE]: `Invalid token pair state`, [TOKEN_MESSENGER_MINTER_V2_ERROR__PROGRAM_PAUSED]: `Instruction is not allowed at this time` };
 }
 
 export function getTokenMessengerMinterV2ErrorMessage(code: TokenMessengerMinterV2Error): string {
-  if (process.env['NODE_ENV'] !== 'production') {
+  if (true) {
     return (tokenMessengerMinterV2ErrorMessages as Record<TokenMessengerMinterV2Error, string>)[code];
   }
 
