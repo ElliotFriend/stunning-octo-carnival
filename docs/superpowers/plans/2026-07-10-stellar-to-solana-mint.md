@@ -242,6 +242,8 @@ git commit -m "feat: Stellar deposit_for_burn targeting Solana (domain 5)"
 - Consumes: generated `getReceiveMessageInstructionAsync` + `MESSAGE_TRANSMITTER_V2_PROGRAM_ADDRESS` (`./generated/message-transmitter`); `TOKEN_MESSENGER_MINTER_V2_PROGRAM_ADDRESS` (`./generated/token-messenger-minter`); `getCreateAssociatedTokenIdempotentInstructionAsync`, `findAssociatedTokenPda`, `TOKEN_PROGRAM_ADDRESS` (`@solana-program/token`); `address`, `getProgramDerivedAddress`, `getAddressEncoder`, `createNoopSigner`, `fetchEncodedAccount`, `AccountRole`, `type Instruction` (`@solana/kit`); `fetchTokenMessenger` decoder (`./generated/token-messenger-minter/accounts`); `solanaRpc`; `SOLANA`; `hexToBytes`/`Hex` (viem); `SolanaWallet`.
 - Produces: `receiveMessageOnSolana(args: { wallet: SolanaWallet; recipientOwner: string; message: Hex; attestation: Hex }): Promise<{ signature: string }>`.
 
+> **What the mint actually does (review correction):** on Solana the receive is NOT a `mint_to` — `handle_receive_finalized_message` **transfers USDC from Circle's shared `custody_token_account` to the recipient ATA** (and a fee to the fee-recipient ATA). So there is no mint account in the CPI list (correctly omitted), and success depends on Circle-side devnet state: the `token_pair(27, StellarUSDC)`, `remote_token_messenger(27)`, and a funded custody. **Pre-flight already run: `remote_token_messenger(27)` and `token_pair(27, StellarUSDC)` both EXIST on devnet** (and the `token_pair` seed encoding `["token_pair","27",decodeContract(usdc)]` is thereby confirmed). Custody funding can still cause a runtime failure — if the mint reverts with an insufficient-funds/custody error, that's Circle's devnet liquidity, not our code.
+
 - [ ] **Step 1: Generalize the signer to take multiple instructions**
 
 In `src/lib/solana/signer.ts`, rename `signAndSendBurnTx` → `signAndSendSolanaTx` and change `instruction: Instruction` to `instructions: Instruction[]`, appending each:
@@ -280,7 +282,7 @@ export async function signAndSendSolanaTx(args: {
 }
 ```
 
-Update `src/lib/solana/cctp.ts`'s burn call from `signAndSendBurnTx({ wallet, instruction, feePayerSigner })` to `signAndSendSolanaTx({ wallet, instructions: [instruction], feePayerSigner })`.
+Update `src/lib/solana/cctp.ts` in BOTH places: the import (`import { signAndSendBurnTx }` → `import { signAndSendSolanaTx }`) AND the call (`signAndSendBurnTx({ wallet, instruction, feePayerSigner })` → `signAndSendSolanaTx({ wallet, instructions: [instruction], feePayerSigner })`). Missing the import rename fails `pnpm check`.
 
 - [ ] **Step 2: Implement `receiveMessageOnSolana`**
 
@@ -310,7 +312,7 @@ import {
 } from './generated/token-messenger-minter';
 import { signAndSendSolanaTx } from './signer';
 import { solanaRpc } from './client';
-import { SOLANA } from '$lib/config';
+import { SOLANA, STELLAR } from '$lib/config';
 import type { SolanaWallet } from './wallet';
 
 const MT = address(SOLANA.programs.messageTransmitterV2);
@@ -331,7 +333,7 @@ export async function receiveMessageOnSolana(args: {
 
     // CCTP V2 message fields (see plan header for offsets).
     const nonce = message.slice(12, 44); //            used_nonce seed
-    const remoteDomain = String(SOLANA.domain === 5 ? 27 : 27); // source = Stellar (27)
+    const remoteDomain = String(STELLAR.domain); //    source = Stellar (27), ASCII seed
     const burnToken = message.slice(152, 184); //      token_pair remote-token seed
     const mint = address(SOLANA.usdc.mint);
 
@@ -417,7 +419,15 @@ export async function receiveMessageOnSolana(args: {
 }
 ```
 
-> **Fragile spots to reconcile at build/run (expected):** (a) the generated `getReceiveMessageInstructionAsync` field names + which of authorityPda/usedNonce/messageTransmitter it auto-resolves (adjust per Task 1 Step 4); (b) whether the Async builder wants `receiver` as an `Address` vs a signer/account object; (c) `fetchTokenMessenger` return field name (assumed `feeRecipient`); (d) account roles — signer flags come from the generated base ix, and every hand-appended CPI account is non-signer (READONLY/WRITABLE only). The adversarial review + the live run in Task 5 settle these.
+> **Fragile spots to reconcile at build/run (adversarial-review-informed):**
+>
+> - **(critical) event-CPI alignment.** `receive_message` uses `#[event_cpi]`, so MessageTransmitter's OWN `event_authority` (`["__event_authority"]` under the MT program) + `program` (the MT program address) must be the **last two fixed accounts** in `base.accounts`. Codama normally auto-resolves them — but **verify they're present** before appending the CPI accounts. If they're missing, every hand-appended CPI account is shifted by two and the tx fails cryptically. (This `event_authority` is the MT program's, distinct from the `tmmEventAuthority` in the CPI list, which is TMM's.)
+> - Generated `getReceiveMessageInstructionAsync` field names + which of authorityPda/usedNonce/messageTransmitter it auto-resolves (adjust per Task 1 Step 4).
+> - `receiver: TMM` as an `Address` is confirmed correct (deepwiki: `receiver` is an `UncheckedAccount`, and `authority_pda` seeds are `["message_transmitter_authority", receiver.key()]`).
+> - `fetchTokenMessenger` field name confirmed `feeRecipient`; its ATA (not the wallet) is `fee_recipient_token_account`.
+> - Account roles: signer flags come from the generated base ix; every hand-appended CPI account is non-signer (READONLY/WRITABLE only). `tokenMinter` is WRITABLE (matches Circle's client even though the Rust field isn't `mut`).
+>
+> The CPI account **order + roles below are a verified exact match to Circle's `test_client.ts`** — do not reorder them.
 
 - [ ] **Step 3: Typecheck + commit**
 
@@ -460,9 +470,18 @@ async function runStellarToSolana(args: {
     const stellarAmount = parseUsdcStellar(args.amount);
 
     const approved = await performStep('approving', 'approve', async () => {
-        const allowance = await getUsdcAllowance(args.stellarAddress);
-        if (allowance < stellarAmount) {
-            await approveUsdc({ owner: args.stellarAddress, amount: stellarAmount });
+        // Signatures per stellar/usdc.ts: {from, spender} objects; spender = the
+        // TMM (it pulls via transfer_from). Copied from runStellarToEvm two-tx path.
+        const existing = await getUsdcAllowance({
+            from: args.stellarAddress,
+            spender: STELLAR.contracts.tokenMessengerMinter,
+        });
+        if (existing < stellarAmount) {
+            await approveUsdc({
+                from: args.stellarAddress,
+                spender: STELLAR.contracts.tokenMessengerMinter,
+                amount: stellarAmount,
+            });
         }
         return { result: true };
     });
@@ -519,7 +538,7 @@ async function runStellarToSolana(args: {
 }
 ```
 
-Verify `getUsdcAllowance`/`approveUsdc` signatures against `stellar/usdc.ts` and match how `runStellarToEvm`'s two-tx path calls them; adjust the arg shape if it differs.
+These `{from, spender, amount}` signatures are confirmed against `stellar/usdc.ts` and match `runStellarToEvm`'s two-tx approve block.
 
 - [ ] **Step 3: stepsFor case + start branch**
 
