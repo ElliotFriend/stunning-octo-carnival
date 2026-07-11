@@ -17,19 +17,29 @@
 
     let trimmed = $derived(burnHash.trim());
 
-    // Source chain is whatever the burn happened on, derived from the
-    // page-level direction. Drives the validation hint and the placeholder.
-    let stellarSource = $derived(direction === 'stellar-to-evm');
+    // Which chain the burn happened on, derived from the page-level direction.
+    // Drives the validation hint + placeholder.
+    let source = $derived<'stellar' | 'evm' | 'solana'>(
+        direction === 'stellar-to-evm' || direction === 'stellar-to-solana'
+            ? 'stellar'
+            : direction === 'solana-to-stellar'
+              ? 'solana'
+              : 'evm',
+    );
 
-    // Format checks are intentionally light — Stellar tx hashes are 64 hex
-    // chars (no 0x), EVM tx hashes are 0x + 64 hex. Iris will reject anything
-    // it doesn't recognize when polling, so this is purely an early-warning
-    // signal, not a security boundary.
+    // Format checks are intentionally light — Stellar tx hashes are 64 hex chars
+    // (no 0x), EVM tx hashes are 0x + 64 hex, Solana signatures are base58 (~88
+    // chars). Iris rejects anything it doesn't recognize when polling, so this is
+    // an early-warning signal, not a security boundary.
     let formatError = $derived.by(() => {
         if (trimmed === '') return null;
-        if (stellarSource) {
+        if (source === 'stellar') {
             if (!/^[0-9a-fA-F]{64}$/.test(trimmed)) {
                 return 'Expected a 64-character hex Stellar tx hash (no 0x prefix).';
+            }
+        } else if (source === 'solana') {
+            if (!/^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(trimmed)) {
+                return 'Expected a base58 Solana transaction signature.';
             }
         } else {
             if (!/^0x[0-9a-fA-F]{64}$/.test(trimmed)) {
@@ -40,9 +50,11 @@
     });
 
     let placeholder = $derived(
-        stellarSource
+        source === 'stellar'
             ? '64-char Stellar tx hash (e.g. a1b2…)'
-            : '0x-prefixed EVM tx hash (e.g. 0xa1b2…)',
+            : source === 'solana'
+              ? 'base58 Solana signature (e.g. 5Yw…)'
+              : '0x-prefixed EVM tx hash (e.g. 0xa1b2…)',
     );
 
     let canResume = $derived(trimmed !== '' && bothConnected && !disabled && formatError === null);

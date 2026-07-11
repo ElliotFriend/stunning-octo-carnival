@@ -883,8 +883,9 @@ export function createTransferStore(
         burnHash: string;
         direction: Direction;
         stellarAddress: string;
-        evmWallet: EvmWallet;
-        evmChainId: EvmChainId;
+        evmWallet?: EvmWallet;
+        evmChainId?: EvmChainId;
+        solanaWallet?: SolanaWallet;
     }) {
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
@@ -895,10 +896,21 @@ export function createTransferStore(
         state.attestation = null;
         state.amount = '';
 
-        const stellarSource = args.direction === 'stellar-to-evm';
-        const burnHashUrl = stellarSource
-            ? stellarTxUrl(args.burnHash)
-            : evmTxUrl(args.evmChainId, args.burnHash);
+        // Which chain produced the burn (keys the attestation lookup + tx link),
+        // and where the mint lands.
+        const source: 'stellar' | 'evm' | 'solana' =
+            args.direction === 'stellar-to-evm' || args.direction === 'stellar-to-solana'
+                ? 'stellar'
+                : args.direction === 'solana-to-stellar'
+                  ? 'solana'
+                  : 'evm';
+
+        const burnHashUrl =
+            source === 'stellar'
+                ? stellarTxUrl(args.burnHash)
+                : source === 'solana'
+                  ? `${SOLANA.explorer}/tx/${args.burnHash}?cluster=devnet`
+                  : evmTxUrl(args.evmChainId!, args.burnHash);
 
         state.steps = stepsFor(args.direction, args.evmChainId, 'two-tx', false, 'two-tx').map(
             (s) => {
@@ -918,7 +930,12 @@ export function createTransferStore(
             },
         );
 
-        const sourceDomain = stellarSource ? STELLAR.domain : EVM_CHAINS[args.evmChainId].domain;
+        const sourceDomain =
+            source === 'stellar'
+                ? STELLAR.domain
+                : source === 'solana'
+                  ? SOLANA.domain
+                  : EVM_CHAINS[args.evmChainId!].domain;
 
         const attest = await performStep<IrisMessage>('attesting', 'attest', async () => {
             const r = await pollAttestation(sourceDomain, args.burnHash, {
@@ -934,27 +951,40 @@ export function createTransferStore(
         state.attestation = attest;
 
         const mintHash = await performStep('minting', 'mint', async () => {
-            if (stellarSource) {
+            if (args.direction === 'stellar-to-evm') {
+                if (!args.evmWallet || !args.evmChainId)
+                    throw new Error('EVM wallet/chain not connected.');
                 const hash = await receiveMessageOnEvm({
                     chainId: args.evmChainId,
                     wallet: args.evmWallet,
                     message: attest.message,
                     attestation: attest.attestation,
                 });
+                return { result: hash, patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) } };
+            }
+            if (args.direction === 'stellar-to-solana') {
+                if (!args.solanaWallet) throw new Error('Solana wallet not connected.');
+                const { signature } = await receiveMessageOnSolana({
+                    wallet: args.solanaWallet,
+                    recipientOwner: args.solanaWallet.address,
+                    message: attest.message as Hex,
+                    attestation: attest.attestation as Hex,
+                });
                 return {
-                    result: hash,
-                    patch: { hash, hashUrl: evmTxUrl(args.evmChainId, hash) },
+                    result: signature,
+                    patch: {
+                        hash: signature,
+                        hashUrl: `${SOLANA.explorer}/tx/${signature}?cluster=devnet`,
+                    },
                 };
             }
+            // evm-to-stellar and solana-to-stellar both mint on Stellar.
             const r = await mintAndForward({
                 caller: args.stellarAddress,
                 message: hexToBytes(attest.message as Hex),
                 attestation: hexToBytes(attest.attestation as Hex),
             });
-            return {
-                result: r.hash,
-                patch: { hash: r.hash, hashUrl: stellarTxUrl(r.hash) },
-            };
+            return { result: r.hash, patch: { hash: r.hash, hashUrl: stellarTxUrl(r.hash) } };
         });
         if (mintHash === null) return;
 

@@ -124,17 +124,25 @@
     }
 
     async function resume(burnHash: string) {
-        // Resume is EVM/Stellar-only this pass; the store's resume() assumes an
-        // EVM chain. The ResumeForm is hidden for Solana, but guard anyway.
-        if (rightChain === 'solana') return;
-        if (!stellar.address || !evm) return;
-        await transfer.resume({
-            burnHash,
-            direction,
-            stellarAddress: stellar.address,
-            evmWallet: evm,
-            evmChainId,
-        });
+        if (!stellar.address) return;
+        if (rightChain === 'solana') {
+            if (!solana) return;
+            await transfer.resume({
+                burnHash,
+                direction,
+                stellarAddress: stellar.address,
+                solanaWallet: solana,
+            });
+        } else {
+            if (!evm) return;
+            await transfer.resume({
+                burnHash,
+                direction,
+                stellarAddress: stellar.address,
+                evmWallet: evm,
+                evmChainId,
+            });
+        }
         if (transfer.state.phase === 'done') {
             await Promise.all([stellarPanel?.refresh(), destPanel?.refresh()]);
         }
@@ -193,7 +201,7 @@
         {#if !bothConnected}
             <p class="hint">Connect both wallets to enable transfers.</p>
         {/if}
-        {#if transfer.state.phase === 'idle' && rightChain !== 'solana'}
+        {#if transfer.state.phase === 'idle'}
             <ResumeForm {direction} {bothConnected} disabled={busy} onResume={resume} />
         {/if}
         {#if direction === 'evm-to-stellar' && stellar.address && evm && transfer.state.phase === 'idle'}
