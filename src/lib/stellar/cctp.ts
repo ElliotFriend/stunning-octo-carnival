@@ -6,7 +6,7 @@ import {
     nativeToScVal,
     xdr,
 } from '@stellar/stellar-sdk';
-import { STELLAR } from '$lib/config';
+import { SOLANA, STELLAR } from '$lib/config';
 import { stellarRpc } from './client';
 import { simulateSignAndSubmit } from './tx';
 
@@ -43,6 +43,42 @@ export async function depositForBurnToEvm(args: {
                 bytesN32(mintRecipient),
                 Address.fromString(STELLAR.contracts.usdc).toScVal(),
                 bytesN32(destinationCaller),
+                nativeToScVal(args.maxFee, { type: 'i128' }),
+                nativeToScVal(args.finalityThreshold, { type: 'u32' }),
+            ),
+        )
+        .setTimeout(60)
+        .build();
+
+    const hash = await simulateSignAndSubmit(tx);
+    return { hash, sourceDomain: STELLAR.domain };
+}
+
+// Burn USDC on Stellar bound for Solana (domain 5). mintRecipient is the
+// recipient's Solana USDC ATA as raw 32 bytes (see solanaAtaToBytes32).
+// destinationCaller stays zero — the Solana mint is permissionless. No hook.
+export async function depositForBurnToSolana(args: {
+    caller: string;
+    amount: bigint; // Stellar 7-decimal subunits
+    mintRecipient: Uint8Array; // 32 bytes — recipient's Solana USDC ATA
+    maxFee: bigint;
+    finalityThreshold: number;
+}): Promise<{ hash: string; sourceDomain: number }> {
+    const account = await stellarRpc.getAccount(args.caller);
+
+    const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: STELLAR.networkPassphrase,
+    })
+        .addOperation(
+            tmm.call(
+                'deposit_for_burn',
+                Address.fromString(args.caller).toScVal(),
+                nativeToScVal(args.amount, { type: 'i128' }),
+                nativeToScVal(SOLANA.domain, { type: 'u32' }),
+                bytesN32(args.mintRecipient),
+                Address.fromString(STELLAR.contracts.usdc).toScVal(),
+                bytesN32(ZERO_BYTES_32),
                 nativeToScVal(args.maxFee, { type: 'i128' }),
                 nativeToScVal(args.finalityThreshold, { type: 'u32' }),
             ),

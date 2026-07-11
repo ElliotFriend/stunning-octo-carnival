@@ -1,5 +1,22 @@
 import { concatHex, pad, stringToHex, toHex, type Hex } from 'viem';
 import { StrKey } from '@stellar/stellar-sdk';
+import { address, getAddressEncoder } from '@solana/kit';
+import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
+import { SOLANA } from '$lib/config';
+
+// A Solana owner's USDC ATA as raw 32 bytes, for use as the CCTP burn
+// mintRecipient when the destination is Solana. Solana pubkeys already fill
+// all 32 bytes (left-aligned) — do NOT right-pad like the EVM helper. The
+// on-chain mint delivers to this token account, so the burn must name the ATA
+// (not the wallet).
+export async function solanaAtaToBytes32(ownerAddress: string): Promise<Uint8Array> {
+    const [ata] = await findAssociatedTokenPda({
+        owner: address(ownerAddress),
+        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+        mint: address(SOLANA.usdc.mint),
+    });
+    return new Uint8Array(getAddressEncoder().encode(ata));
+}
 
 // Hook data layout for routing CCTP funds to a Stellar G-address via
 // CctpForwarder. From Circle's Stellar CCTP docs:
