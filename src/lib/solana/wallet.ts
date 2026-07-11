@@ -55,6 +55,18 @@ function writeStoredName(name: string): void {
     }
 }
 
+// Clear the persisted wallet so detectExistingSolana() won't silently
+// reconnect on the next load. Mirrors evm/wallet.ts's clearStoredRdns on
+// disconnect.
+export function disconnectSolana(): void {
+    if (!browser) return;
+    try {
+        window.localStorage.removeItem(NAME_STORAGE_KEY);
+    } catch {
+        // see writeStoredName
+    }
+}
+
 export function discoverSolanaWallets(): SolanaWalletInfo[] {
     if (!browser) return [];
     return getWallets()

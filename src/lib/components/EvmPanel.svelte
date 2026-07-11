@@ -137,7 +137,13 @@
     // the binding) so DestinationPanel must NOT pre-assign it, or the id-equality
     // guard here would skip the wallet network switch + refreshes.
     export async function setChain(id: EvmChainId) {
-        if (id === chainId) return;
+        if (id === chainId) {
+            // Same selected chain (e.g. returning from Solana to the same EVM
+            // chip) — the wallet may have drifted networks while we were away, so
+            // re-assert. No-op (no prompt) when it's already correct.
+            if (wallet && wallet.chainId !== EVM_CHAINS[id].chain.id) await switchChain();
+            return;
+        }
         chainId = id;
         // If switching to a chain without a deployed wrapper, drop back to
         // two-tx so the user doesn't submit with a flow this chain can't run.

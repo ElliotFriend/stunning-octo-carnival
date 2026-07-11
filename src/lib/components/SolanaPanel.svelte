@@ -4,6 +4,7 @@
     import {
         connectSolana,
         detectExistingSolana,
+        disconnectSolana,
         discoverSolanaWallets,
         type SolanaWallet,
     } from '$lib/solana/wallet';
@@ -69,6 +70,7 @@
     }
 
     function disconnect() {
+        disconnectSolana();
         wallet = null;
         balance = null;
     }
