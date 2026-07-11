@@ -20,9 +20,10 @@ The transfer store already fully supports Solana: `Direction` includes
 `solana-to-stellar` and `stellar-to-solana`, `runSolanaToStellar` /
 `runStellarToSolana` are implemented and proven end-to-end, `stepsFor` has both
 branches, and fees use `SOLANA_MAX_FEE` / `parseUsdcSolana`. **The entire gap is
-main-page UI/state plumbing.** The only store change needed is making
-`start()`'s `evmWallet` optional (today it's required; the spike passed
-`undefined as never`).
+main-page UI/state plumbing** plus a small store change: making the EVM-side
+inputs (`evmWallet`, `evmChainId`) genuinely optional so a Solana transfer
+carries no phantom EVM chain (today `evmChainId` is required and the spike passed
+a `DEFAULT_EVM_CHAIN` dummy + `evmWallet: undefined as never`). See "Store change".
 
 Today the top-right is `EvmPanel`, which **owns** the chain-chip selector and
 assumes EVM everywhere (`ensureChain`, `getEvmUsdcBalance`, `EVM_CHAINS[chainId]`,
@@ -93,8 +94,8 @@ refresh()`. Remove the throwaway `amount` / `recipient` / `onBurn` / `steps`
 - Render `<DestinationPanel>` in the top-right instead of `<EvmPanel>`.
 - `send()` / `resume()` branch on `rightChain`:
     - Solana: require `solana`; call `start({ direction, stellarAddress,
-solanaWallet: solana, evmChainId: DEFAULT_EVM_CHAIN, amount, speed: 'standard' })`
-      (no `evmWallet`).
+solanaWallet: solana, amount, speed: 'standard' })` — no `evmWallet`, no
+      `evmChainId`.
     - EVM: unchanged.
 - `bothConnected` and other gates branch on `rightChain` (Stellar + the active
   right wallet).
@@ -102,13 +103,30 @@ solanaWallet: solana, evmChainId: DEFAULT_EVM_CHAIN, amount, speed: 'standard' }
 - `effectiveSpeed` coerces Solana directions to `standard` (mirrors the existing
   `stellar-to-evm` coercion).
 
-## Store change
+## Store change (proper: no EVM placeholder for Solana)
 
-- `createTransferStore().start()`: make `evmWallet?: EvmWallet` optional. The EVM
-  dispatch branches already throw a clear error if it's missing; the Solana
-  branch ignores it. `TransferState.evmChainId` stays required — Solana transfers
-  pass `DEFAULT_EVM_CHAIN` as an inert placeholder (as the spike did), and
-  `TransferProgress`'s `EVM_CHAINS[evmChainId]` read stays valid.
+Solana transfers no longer carry a dummy `evmChainId`. Both `evmWallet` and
+`evmChainId` become genuinely optional, and every read is guarded so a Solana
+transfer holds no phantom EVM chain.
+
+- `start()` args: `evmWallet?: EvmWallet` and `evmChainId?: EvmChainId`. EVM
+  dispatch throws a clear error if either is missing; Solana dispatch ignores
+  them.
+- `TransferState.evmChainId?: EvmChainId` (optional). `start()` sets it from the
+  arg — `undefined` for Solana. The page passes `evmChainId: rightChain ===
+'solana' ? undefined : rightChain`.
+- `createTransferStore(initialDirection, initialEvmChain?, ...)`: the initial EVM
+  chain stays `DEFAULT_EVM_CHAIN` as the _default when EVM is selected_ — that is
+  not a Solana placeholder, and it's overwritten per-transfer by `start()`.
+- `stepsFor(direction, evmChainId?, ...)`: `evmChainId` optional; the `evmLabel`
+  it derives is only referenced inside the EVM branches, so compute it lazily /
+  guard it (never index `EVM_CHAINS[undefined]`).
+- `TransferProgress`: guard `longWaitChainLabel` — `transfer.evmChainId ?
+EVM_CHAINS[transfer.evmChainId].label : ''` (already only meaningful for
+  `evm-to-stellar`). `evmTxUrl(...)` is only called on EVM paths; confirm no
+  unguarded `EVM_CHAINS[transfer.evmChainId]` read remains.
+- `resume()`: same optionality — its EVM-only path keeps requiring
+  `evmWallet`/`evmChainId`; a Solana resume path is out of scope for this pass.
 
 ## Flow toggles / speed
 
