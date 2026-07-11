@@ -12,7 +12,34 @@ import {
     type TransactionSigner,
 } from '@solana/kit';
 import { solanaRpc } from './client';
+import { sleep } from '$lib/utils';
 import type { SolanaWallet } from './wallet';
+
+// Poll until the tx confirms — sendTransaction only submits. Without this the
+// caller marks the transfer "done" before the mint lands, and a balance refetch
+// races the confirmation (stale balance). We have no WS subscription, so poll
+// getSignatureStatuses over HTTP.
+async function confirmSignature(signature: string): Promise<void> {
+    for (let i = 0; i < 30; i++) {
+        const { value } = await solanaRpc
+            .getSignatureStatuses([
+                signature as Parameters<typeof solanaRpc.getSignatureStatuses>[0][number],
+            ])
+            .send();
+        const status = value[0];
+        if (status) {
+            if (status.err) throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+            if (
+                status.confirmationStatus === 'confirmed' ||
+                status.confirmationStatus === 'finalized'
+            ) {
+                return;
+            }
+        }
+        await sleep(1000);
+    }
+    throw new Error('Timed out confirming Solana transaction.');
+}
 
 // Wallet Standard chain id for Phantom's signing feature. Reads go through our
 // pinned devnet RPC regardless, but signTransaction wants the chain named.
@@ -73,5 +100,6 @@ export async function signAndSendSolanaTx(args: {
         .sendTransaction(wireBase64, { encoding: 'base64', preflightCommitment: 'confirmed' })
         .send();
 
+    await confirmSignature(signature);
     return signature;
 }
