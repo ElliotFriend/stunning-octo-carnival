@@ -161,8 +161,8 @@
     <header class="header">
         <h1 class="title">CCTP Demo</h1>
         <p class="subtitle">
-            Bridge USDC between Stellar testnet and any CCTP-supported EVM chain using Circle's
-            Cross-Chain Transfer Protocol V2.
+            Bridge USDC between Stellar and any CCTP-supported chain using Circle's Cross-Chain
+            Transfer Protocol V2.
         </p>
     </header>
 
