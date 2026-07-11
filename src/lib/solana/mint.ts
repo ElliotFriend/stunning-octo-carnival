@@ -2,6 +2,7 @@ import {
     AccountRole,
     address,
     createNoopSigner,
+    fetchEncodedAccount,
     getAddressEncoder,
     getProgramDerivedAddress,
     type Address,
@@ -86,11 +87,23 @@ export async function receiveMessageOnSolana(args: {
         mint,
     });
 
-    const createAta = await getCreateAssociatedTokenIdempotentInstructionAsync({
-        payer: ownerSigner,
-        owner,
-        mint,
-    });
+    // Ensure the recipient ATA exists — in its OWN transaction. Bundling the
+    // create with receiveMessage overflows Solana's 1232-byte tx limit (Kit
+    // throws "encoding overruns Uint8Array"). Only send it when missing, so the
+    // common case stays a single signature.
+    const ataInfo = await fetchEncodedAccount(solanaRpc, recipientAta);
+    if (!ataInfo.exists) {
+        const createAta = await getCreateAssociatedTokenIdempotentInstructionAsync({
+            payer: ownerSigner,
+            owner,
+            mint,
+        });
+        await signAndSendSolanaTx({
+            wallet: args.wallet,
+            instructions: [createAta],
+            feePayerSigner: ownerSigner,
+        });
+    }
 
     const base = await getReceiveMessageInstructionAsync({
         payer: ownerSigner,
@@ -126,7 +139,7 @@ export async function receiveMessageOnSolana(args: {
 
     const signature = await signAndSendSolanaTx({
         wallet: args.wallet,
-        instructions: [createAta, receive],
+        instructions: [receive],
         feePayerSigner: ownerSigner,
     });
     return { signature };
