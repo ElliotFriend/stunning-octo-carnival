@@ -12,11 +12,13 @@
     onDestroy(() => clearInterval(tick));
 
     let longWaitEtaMs = $derived(
-        transfer.direction === 'evm-to-stellar'
+        transfer.direction === 'evm-to-stellar' && transfer.evmChainId
             ? EVM_CHAINS[transfer.evmChainId].attestationEtaMs
             : undefined,
     );
-    let longWaitChainLabel = $derived(EVM_CHAINS[transfer.evmChainId].label);
+    let longWaitChainLabel = $derived(
+        transfer.evmChainId ? EVM_CHAINS[transfer.evmChainId].label : '',
+    );
 
     function fmtElapsed(s: { startedAt?: number; endedAt?: number }): string | null {
         if (!s.startedAt) return null;

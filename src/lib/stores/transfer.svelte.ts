@@ -68,7 +68,8 @@ export type Step = {
 
 export type TransferState = {
     direction: Direction;
-    evmChainId: EvmChainId;
+    // Undefined for Solana transfers, which carry no EVM chain.
+    evmChainId?: EvmChainId;
     outboundFlow: OutboundFlow;
     forwarding: boolean;
     inboundFlow: InboundFlow;
@@ -81,7 +82,7 @@ export type TransferState = {
 
 const initialState = (
     direction: Direction,
-    evmChainId: EvmChainId,
+    evmChainId: EvmChainId | undefined,
     outboundFlow: OutboundFlow,
     forwarding: boolean,
     inboundFlow: InboundFlow,
@@ -100,12 +101,14 @@ const initialState = (
 
 function stepsFor(
     direction: Direction,
-    evmChainId: EvmChainId,
+    evmChainId: EvmChainId | undefined,
     outboundFlow: OutboundFlow,
     forwarding: boolean,
     inboundFlow: InboundFlow,
 ): Step[] {
-    const evmLabel = EVM_CHAINS[evmChainId].label;
+    // Only the EVM branches below reference this; the Solana branches return
+    // first, so it's fine that it's empty when evmChainId is undefined.
+    const evmLabel = evmChainId ? EVM_CHAINS[evmChainId].label : '';
     if (direction === 'stellar-to-evm') {
         // The wrapper shape bundles approve + burn into one tx (no separate
         // approve step); the forwarding toggle only changes the burn/mint labels.
@@ -795,34 +798,48 @@ export function createTransferStore(
     async function start(args: {
         direction: Direction;
         stellarAddress: string;
-        evmWallet: EvmWallet;
-        evmChainId: EvmChainId;
-        outboundFlow: OutboundFlow;
-        forwarding: boolean;
-        inboundFlow: InboundFlow;
+        // EVM inputs are optional — Solana transfers omit them entirely.
+        evmWallet?: EvmWallet;
+        evmChainId?: EvmChainId;
+        outboundFlow?: OutboundFlow;
+        forwarding?: boolean;
+        inboundFlow?: InboundFlow;
         amount: string;
         speed: TransferSpeed;
         solanaWallet?: SolanaWallet;
         stellarRecipient?: string;
     }) {
+        const outboundFlow = args.outboundFlow ?? 'two-tx';
+        const forwarding = args.forwarding ?? false;
+        const inboundFlow = args.inboundFlow ?? 'two-tx';
         state.direction = args.direction;
         state.evmChainId = args.evmChainId;
-        state.outboundFlow = args.outboundFlow;
-        state.forwarding = args.forwarding;
-        state.inboundFlow = args.inboundFlow;
+        state.outboundFlow = outboundFlow;
+        state.forwarding = forwarding;
+        state.inboundFlow = inboundFlow;
         state.steps = stepsFor(
             args.direction,
             args.evmChainId,
-            args.outboundFlow,
-            args.forwarding,
-            args.inboundFlow,
+            outboundFlow,
+            forwarding,
+            inboundFlow,
         );
         state.error = null;
         state.amount = '';
         state.attestation = null;
         try {
             if (args.direction === 'stellar-to-evm') {
-                await runStellarToEvm(args);
+                if (!args.evmWallet || !args.evmChainId)
+                    throw new Error('EVM wallet/chain not connected.');
+                await runStellarToEvm({
+                    stellarAddress: args.stellarAddress,
+                    evmWallet: args.evmWallet,
+                    evmChainId: args.evmChainId,
+                    outboundFlow,
+                    forwarding,
+                    amount: args.amount,
+                    speed: args.speed,
+                });
             } else if (args.direction === 'solana-to-stellar') {
                 if (!args.solanaWallet) throw new Error('Solana wallet not connected.');
                 await runSolanaToStellar({
@@ -841,7 +858,16 @@ export function createTransferStore(
                     speed: args.speed,
                 });
             } else {
-                await runEvmToStellar(args);
+                if (!args.evmWallet || !args.evmChainId)
+                    throw new Error('EVM wallet/chain not connected.');
+                await runEvmToStellar({
+                    stellarAddress: args.stellarAddress,
+                    evmWallet: args.evmWallet,
+                    evmChainId: args.evmChainId,
+                    inboundFlow,
+                    amount: args.amount,
+                    speed: args.speed,
+                });
             }
         } catch (err) {
             fail(errMsg(err));

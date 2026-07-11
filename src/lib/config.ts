@@ -157,6 +157,9 @@ export const SOLANA_MAX_FEE = 500n;
 export type Direction =
     'stellar-to-evm' | 'evm-to-stellar' | 'solana-to-stellar' | 'stellar-to-solana';
 
+// The right-side chain in the main-page selector: an EVM chain or Solana.
+export type RightChain = EvmChainId | 'solana';
+
 // On the Stellar→EVM side the user picks a transaction shape:
 //  - 'wrapper'  : one Soroban tx via the bridge wrapper contract (combined
 //                 approve + deposit_for_burn under one Freighter prompt)
