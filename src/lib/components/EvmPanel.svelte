@@ -132,7 +132,11 @@
         }
     }
 
-    async function pickChain(id: EvmChainId) {
+    // Imperative: DestinationPanel (which owns the chip row) calls this when an
+    // EVM chip is picked. Owns the write to `chainId` (which flows back out via
+    // the binding) so DestinationPanel must NOT pre-assign it, or the id-equality
+    // guard here would skip the wallet network switch + refreshes.
+    export async function setChain(id: EvmChainId) {
         if (id === chainId) return;
         chainId = id;
         // If switching to a chain without a deployed wrapper, drop back to
@@ -163,22 +167,6 @@
         <span class="badge {chainId}">{selectedCfg.label}</span>
         <span class="muted">domain {selectedCfg.domain}</span>
     </header>
-
-    <div class="chain-picker" role="tablist" aria-label="EVM chain">
-        {#each Object.values(EVM_CHAINS) as cfg (cfg.id)}
-            <button
-                type="button"
-                class="chip"
-                class:active={chainId === cfg.id}
-                disabled={disabled || connecting}
-                onclick={() => pickChain(cfg.id)}
-                role="tab"
-                aria-selected={chainId === cfg.id}
-            >
-                {cfg.label}
-            </button>
-        {/each}
-    </div>
 
     {#if wallet}
         <div class="addr-row">
@@ -332,11 +320,6 @@
         color: var(--text-dim);
         font-size: 0.85rem;
         font-family: var(--mono);
-    }
-
-    .chain-picker {
-        display: flex;
-        gap: 0.4rem;
     }
 
     .chip {

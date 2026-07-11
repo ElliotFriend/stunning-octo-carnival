@@ -1,16 +1,19 @@
 <script lang="ts">
     import StellarPanel from '$lib/components/StellarPanel.svelte';
-    import EvmPanel from '$lib/components/EvmPanel.svelte';
+    import DestinationPanel from '$lib/components/DestinationPanel.svelte';
     import DirectionSwitcher from '$lib/components/DirectionSwitcher.svelte';
     import TransferForm from '$lib/components/TransferForm.svelte';
     import TransferProgress from '$lib/components/TransferProgress.svelte';
     import HookDataPreview from '$lib/components/HookDataPreview.svelte';
     import StellarBurnPreview from '$lib/components/StellarBurnPreview.svelte';
     import EvmBurnPreview from '$lib/components/EvmBurnPreview.svelte';
+    import SolanaBurnPreview from '$lib/components/SolanaBurnPreview.svelte';
+    import StellarToSolanaBurnPreview from '$lib/components/StellarToSolanaBurnPreview.svelte';
     import ResumeForm from '$lib/components/ResumeForm.svelte';
     import { createTransferStore } from '$lib/stores/transfer.svelte';
     import type { FreighterState } from '$lib/stellar/freighter';
     import type { EvmWallet } from '$lib/evm/wallet';
+    import type { SolanaWallet } from '$lib/solana/wallet';
     import type { SendCallsCapability } from '$lib/evm/capabilities';
     import {
         DEFAULT_EVM_CHAIN,
@@ -23,6 +26,7 @@
         type EvmChainId,
         type InboundFlow,
         type OutboundFlow,
+        type RightChain,
         type TransferSpeed,
     } from '$lib/config';
 
@@ -32,8 +36,12 @@
         networkPassphrase: null,
     });
     let evm = $state<EvmWallet | null>(null);
+    let solana = $state<SolanaWallet | null>(null);
     let evmChainId = $state<EvmChainId>(DEFAULT_EVM_CHAIN);
-    let direction = $state<Direction>('stellar-to-evm');
+    // The right-side selector value (an EVM chain id, or 'solana') + the
+    // orientation flag together derive `direction`.
+    let rightChain = $state<RightChain>(DEFAULT_EVM_CHAIN);
+    let stellarIsSource = $state(true);
     let outboundFlow = $state<OutboundFlow>(DEFAULT_OUTBOUND_FLOW);
     let forwarding = $state<boolean>(DEFAULT_FORWARDING);
     let inboundFlow = $state<InboundFlow>(DEFAULT_INBOUND_FLOW);
@@ -44,7 +52,7 @@
     // Component instance handles, populated by `bind:this`. Used to imperatively
     // refresh each panel's balance after a successful transfer.
     let stellarPanel = $state<{ refresh: () => Promise<void> } | undefined>();
-    let evmPanel = $state<{ refresh: () => Promise<void> } | undefined>();
+    let destPanel = $state<{ refresh: () => Promise<void> } | undefined>();
 
     const transfer = createTransferStore(
         'stellar-to-evm',
@@ -54,7 +62,18 @@
         DEFAULT_INBOUND_FLOW,
     );
 
-    let bothConnected = $derived(!!stellar.address && !!evm);
+    let direction = $derived<Direction>(
+        rightChain === 'solana'
+            ? stellarIsSource
+                ? 'stellar-to-solana'
+                : 'solana-to-stellar'
+            : stellarIsSource
+              ? 'stellar-to-evm'
+              : 'evm-to-stellar',
+    );
+    let rightLabel = $derived(rightChain === 'solana' ? 'Solana' : EVM_CHAINS[rightChain].label);
+    let rightConnected = $derived(rightChain === 'solana' ? !!solana : !!evm);
+    let bothConnected = $derived(!!stellar.address && rightConnected);
     let busy = $derived(
         transfer.state.phase !== 'idle' &&
             transfer.state.phase !== 'done' &&
@@ -62,37 +81,47 @@
     );
     let canSubmit = $derived(bothConnected && amount.trim() !== '' && !busy);
 
-    let evmLabel = $derived(EVM_CHAINS[evmChainId].label);
-
-    // Stellar finalizes in seconds and always attests at the finalized threshold,
-    // so Fast Transfer is not possible with Stellar as the source. Coerce the
-    // submitted/previewed speed to standard for that direction regardless of the
-    // picker's lingering value (the UI also disables Fast there).
-    let effectiveSpeed = $derived<TransferSpeed>(
-        direction === 'stellar-to-evm' ? 'standard' : speed,
-    );
+    // Fast Transfer applies only when a non-Solana chain is the source; Stellar
+    // finalizes in seconds and Solana is Standard-only in this demo.
+    let fastAllowed = $derived(rightChain !== 'solana' && !stellarIsSource);
+    let effectiveSpeed = $derived<TransferSpeed>(fastAllowed ? speed : 'standard');
 
     async function send() {
-        if (!stellar.address || !evm) return;
-        await transfer.start({
-            direction,
-            stellarAddress: stellar.address,
-            evmWallet: evm,
-            evmChainId,
-            outboundFlow,
-            forwarding,
-            inboundFlow,
-            amount: amount.trim(),
-            speed: effectiveSpeed,
-        });
+        if (!stellar.address) return;
+        if (rightChain === 'solana') {
+            if (!solana) return;
+            await transfer.start({
+                direction,
+                stellarAddress: stellar.address,
+                solanaWallet: solana,
+                amount: amount.trim(),
+                speed: 'standard',
+            });
+        } else {
+            if (!evm) return;
+            await transfer.start({
+                direction,
+                stellarAddress: stellar.address,
+                evmWallet: evm,
+                evmChainId,
+                outboundFlow,
+                forwarding,
+                inboundFlow,
+                amount: amount.trim(),
+                speed: effectiveSpeed,
+            });
+        }
         // Skip refetch on error — the burn may not have landed, and a failed RPC
         // call here would clobber the error state shown to the user.
         if (transfer.state.phase === 'done') {
-            await Promise.all([stellarPanel?.refresh(), evmPanel?.refresh()]);
+            await Promise.all([stellarPanel?.refresh(), destPanel?.refresh()]);
         }
     }
 
     async function resume(burnHash: string) {
+        // Resume is EVM/Stellar-only this pass; the store's resume() assumes an
+        // EVM chain. The ResumeForm is hidden for Solana, but guard anyway.
+        if (rightChain === 'solana') return;
         if (!stellar.address || !evm) return;
         await transfer.resume({
             burnHash,
@@ -102,7 +131,7 @@
             evmChainId,
         });
         if (transfer.state.phase === 'done') {
-            await Promise.all([stellarPanel?.refresh(), evmPanel?.refresh()]);
+            await Promise.all([stellarPanel?.refresh(), destPanel?.refresh()]);
         }
     }
 
@@ -130,10 +159,12 @@
             {direction}
             disabled={busy}
         />
-        <EvmPanel
-            bind:this={evmPanel}
-            bind:wallet={evm}
-            bind:chainId={evmChainId}
+        <DestinationPanel
+            bind:this={destPanel}
+            bind:chain={rightChain}
+            bind:evmWallet={evm}
+            bind:evmChainId
+            bind:solanaWallet={solana}
             bind:inboundFlow
             bind:sendCallsCap
             {direction}
@@ -142,10 +173,11 @@
     </div>
 
     <section class="action">
-        <DirectionSwitcher bind:direction disabled={busy} {evmLabel} />
+        <DirectionSwitcher bind:stellarIsSource otherLabel={rightLabel} disabled={busy} />
         <TransferForm
-            {direction}
-            {evmLabel}
+            otherLabel={rightLabel}
+            {stellarIsSource}
+            {fastAllowed}
             bind:amount
             bind:speed
             disabled={busy}
@@ -156,7 +188,7 @@
         {#if !bothConnected}
             <p class="hint">Connect both wallets to enable transfers.</p>
         {/if}
-        {#if transfer.state.phase === 'idle'}
+        {#if transfer.state.phase === 'idle' && rightChain !== 'solana'}
             <ResumeForm {direction} {bothConnected} disabled={busy} onResume={resume} />
         {/if}
         {#if direction === 'evm-to-stellar' && stellar.address && evm && transfer.state.phase === 'idle'}
@@ -180,6 +212,20 @@
                 {outboundFlow}
                 {forwarding}
                 speed={effectiveSpeed}
+            />
+        {/if}
+        {#if direction === 'solana-to-stellar' && stellar.address && solana && transfer.state.phase === 'idle'}
+            <SolanaBurnPreview
+                solanaAddress={solana.address}
+                stellarRecipient={stellar.address}
+                {amount}
+            />
+        {/if}
+        {#if direction === 'stellar-to-solana' && stellar.address && solana && transfer.state.phase === 'idle'}
+            <StellarToSolanaBurnPreview
+                stellarAddress={stellar.address}
+                solanaRecipient={solana.address}
+                {amount}
             />
         {/if}
     </section>

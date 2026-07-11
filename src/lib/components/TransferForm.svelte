@@ -1,9 +1,10 @@
 <script lang="ts">
-    import type { Direction, TransferSpeed } from '$lib/config';
+    import type { TransferSpeed } from '$lib/config';
 
     let {
-        direction,
-        evmLabel = 'EVM',
+        otherLabel = 'EVM',
+        stellarIsSource = true,
+        fastAllowed = false,
         amount = $bindable<string>(''),
         speed = $bindable<TransferSpeed>('standard'),
         disabled = false,
@@ -11,8 +12,12 @@
         canSubmit,
         onsubmit,
     }: {
-        direction: Direction;
-        evmLabel?: string;
+        otherLabel?: string;
+        stellarIsSource?: boolean;
+        // Whether Fast Transfer applies to the current route (only when a
+        // non-Solana chain is the source). Stellar-source and any Solana route
+        // are Standard-only.
+        fastAllowed?: boolean;
         amount?: string;
         speed?: TransferSpeed;
         disabled?: boolean;
@@ -26,22 +31,18 @@
         if (canSubmit && !busy) onsubmit();
     }
 
-    let evmShort = $derived(evmLabel.split(' ')[0]);
+    let otherShort = $derived(otherLabel.split(' ')[0]);
     let buttonLabel = $derived(
         busy
             ? 'Working…'
-            : direction === 'stellar-to-evm'
-              ? `Send Stellar → ${evmShort}`
-              : `Send ${evmShort} → Stellar`,
+            : stellarIsSource
+              ? `Send Stellar → ${otherShort}`
+              : `Send ${otherShort} → Stellar`,
     );
 
-    // Stellar finalizes in seconds, so it always attests at the finalized
-    // threshold — Fast Transfer (mint-before-finality) is N/A as a source.
-    let stellarSource = $derived(direction === 'stellar-to-evm');
-
     let etaCaption = $derived(
-        stellarSource
-            ? 'Standard only — Stellar finalizes in seconds, so Fast Transfer is N/A as a source.'
+        !fastAllowed
+            ? 'Standard only — Fast Transfer (mint-before-finality) is not available for this route.'
             : speed === 'fast'
               ? 'Fast: mint before finality — Circle charges a basis-point fee.'
               : 'Standard: wait for source-chain finality — no fee.',
@@ -69,11 +70,11 @@
             <button
                 type="button"
                 class="chip"
-                class:active={stellarSource || speed === 'standard'}
+                class:active={!fastAllowed || speed === 'standard'}
                 {disabled}
                 onclick={() => (speed = 'standard')}
                 role="tab"
-                aria-selected={stellarSource || speed === 'standard'}
+                aria-selected={!fastAllowed || speed === 'standard'}
                 title="Wait for source-chain finality — no fee"
             >
                 Standard
@@ -81,14 +82,14 @@
             <button
                 type="button"
                 class="chip"
-                class:active={!stellarSource && speed === 'fast'}
-                disabled={disabled || stellarSource}
+                class:active={fastAllowed && speed === 'fast'}
+                disabled={disabled || !fastAllowed}
                 onclick={() => (speed = 'fast')}
                 role="tab"
-                aria-selected={!stellarSource && speed === 'fast'}
-                title={stellarSource
-                    ? 'N/A from Stellar — it finalizes in seconds, so there is no pre-finality window to mint into'
-                    : 'Mint before finality — Circle charges a basis-point fee'}
+                aria-selected={fastAllowed && speed === 'fast'}
+                title={fastAllowed
+                    ? 'Mint before finality — Circle charges a basis-point fee'
+                    : 'Not available for this route — the source finalizes with no pre-finality window'}
             >
                 Fast
             </button>

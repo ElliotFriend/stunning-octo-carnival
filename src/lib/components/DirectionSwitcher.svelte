@@ -1,31 +1,27 @@
 <script lang="ts">
-    import type { Direction } from '$lib/config';
-
+    // Orientation-based: the page owns the (rightChain, stellarIsSource) →
+    // Direction derivation, since the right side can now be Solana or an EVM chain.
     let {
-        direction = $bindable<Direction>('stellar-to-evm'),
-        evmLabel = 'EVM',
+        stellarIsSource = $bindable<boolean>(true),
+        otherLabel = 'EVM',
         disabled = false,
     }: {
-        direction?: Direction;
-        evmLabel?: string;
+        stellarIsSource?: boolean;
+        otherLabel?: string;
         disabled?: boolean;
     } = $props();
 
     function flip() {
-        direction = direction === 'stellar-to-evm' ? 'evm-to-stellar' : 'stellar-to-evm';
+        stellarIsSource = !stellarIsSource;
     }
 
-    let evmShort = $derived(evmLabel.split(' ')[0]);
+    let otherShort = $derived(otherLabel.split(' ')[0]);
 </script>
 
 <div class="switcher">
-    <span class="from">
-        {direction === 'stellar-to-evm' ? 'Stellar' : evmShort}
-    </span>
+    <span class="from">{stellarIsSource ? 'Stellar' : otherShort}</span>
     <button class="flip" onclick={flip} {disabled} aria-label="Flip direction"> ⇄ </button>
-    <span class="to">
-        {direction === 'stellar-to-evm' ? evmShort : 'Stellar'}
-    </span>
+    <span class="to">{stellarIsSource ? otherShort : 'Stellar'}</span>
 </div>
 
 <style>
