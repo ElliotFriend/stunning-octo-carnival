@@ -2,6 +2,7 @@
     import { pad, toHex } from 'viem';
     import {
         EVM_CHAINS,
+        SOLANA,
         STELLAR,
         STELLAR_MAX_FEE,
         type EvmChainId,
@@ -15,28 +16,37 @@
         computeMaxFee,
         fetchForwardFee,
         forwardedMaxFeeStellar,
+        type ForwardFeeRow,
     } from '$lib/circle/fees';
     import { CCTP_FORWARD_MAGIC, encodeCctpForwardHookData } from '$lib/stellar/cctp';
+    import { solanaAtaToBytes32 } from '$lib/stellar/recipient';
     import { parseUsdcStellar, formatUsdc } from '$lib/stellar/usdc';
     import { shortAddr } from '$lib/utils';
 
+    // The stellar-source burn preview, reused for either destination. Pass EVM
+    // fields for a Stellar→EVM burn, or `solanaRecipient` (a Solana owner
+    // address) for a Stellar→Solana burn — the two are mutually exclusive.
     let {
         stellarAddress,
         evmRecipient,
         evmChainId,
+        solanaRecipient,
         amount,
         outboundFlow,
         forwarding,
         speed,
     }: {
         stellarAddress: string;
-        evmRecipient: `0x${string}`;
-        evmChainId: EvmChainId;
+        evmRecipient?: `0x${string}`;
+        evmChainId?: EvmChainId;
+        solanaRecipient?: string;
         amount: string;
         outboundFlow: OutboundFlow;
         forwarding: boolean;
         speed: TransferSpeed;
     } = $props();
+
+    let toSolana = $derived(!!solanaRecipient);
 
     type Parsed = { ok: true; raw: bigint } | { ok: false };
 
@@ -55,18 +65,20 @@
         })(),
     );
 
-    let chain = $derived(EVM_CHAINS[evmChainId]);
+    // EVM-only chain config — undefined for a Solana destination. Every read is
+    // guarded by `toSolana` (template + deriveds) so it never indexes with undefined.
+    let chain = $derived(toSolana ? undefined : EVM_CHAINS[evmChainId!]);
 
-    // Route-keyed fee promise — re-runs when evmChainId changes, NOT per keystroke.
-    let destDomain = $derived(EVM_CHAINS[evmChainId].domain);
+    // Destination domain: Solana (5) or the selected EVM chain's domain.
+    let destDomain = $derived(toSolana ? SOLANA.domain : EVM_CHAINS[evmChainId!].domain);
+    // Route-keyed fee promise — re-runs when the route changes, NOT per keystroke.
     let feePromise = $derived(fetchBurnFee(STELLAR.domain, destDomain));
     let threshold = $derived(thresholdFor(speed));
 
-    // The wrapper exposes extra args ahead of the burn args (usdc + tmm routing
-    // addresses); the two-tx shape calls the TMM directly. The forwarding toggle
-    // is orthogonal — it routes either shape through the *_with_hook variant.
-    let isWrapper = $derived(outboundFlow === 'wrapper');
-    let isForwarding = $derived(forwarding);
+    // Solana destination is always plain two-tx deposit_for_burn — no wrapper,
+    // no forwarding hook. The wrapper/forwarding shapes are EVM-only.
+    let isWrapper = $derived(!toSolana && outboundFlow === 'wrapper');
+    let isForwarding = $derived(!toSolana && forwarding);
 
     let contractAddress = $derived(
         isWrapper ? STELLAR.contracts.bridgeWrapper : STELLAR.contracts.tokenMessengerMinter,
@@ -85,17 +97,22 @@
     );
 
     // Forwarding maxFee comes from the ?forward=true quote (protocol fee +
-    // forwarding service fee), keyed by route so it re-runs on chain change only.
-    let forwardFeePromise = $derived(fetchForwardFee(STELLAR.domain, destDomain));
+    // forwarding service fee), keyed by route. Never rendered for a Solana
+    // destination (forwarding is EVM-only), so resolve empty there instead of
+    // firing a pointless request.
+    let forwardFeePromise = $derived<Promise<ForwardFeeRow[]>>(
+        toSolana ? Promise.resolve([]) : fetchForwardFee(STELLAR.domain, destDomain),
+    );
 
     // The exact 32-byte hookData submitted on-chain, rendered as hex — single
     // source of truth is the encoder in cctp.ts.
     const hookDataHex = toHex(encodeCctpForwardHookData());
 
-    // Padded mint_recipient is whatever 20-byte EVM address, left-padded to 32
-    // bytes — Soroban's `BytesN<32>` mirrors the raw 32-byte slot CCTP uses on
-    // the destination side.
-    let mintRecipientHex = $derived(pad(evmRecipient, { size: 32 }));
+    // mint_recipient (32 bytes): an EVM address left-padded to 32, OR — for a
+    // Solana destination — the recipient's Solana USDC ATA (async; resolved via
+    // {#await} in the template).
+    let mintRecipientHex = $derived(evmRecipient ? pad(evmRecipient, { size: 32 }) : undefined);
+    let solanaAtaPromise = $derived(solanaRecipient ? solanaAtaToBytes32(solanaRecipient) : null);
 
     // 32 zero bytes signals "open" — anyone can call receiveMessage on the
     // destination. Restricting it to a specific caller is a different mode we
@@ -199,15 +216,26 @@
         <li class="row">
             <span class="arg-name">destination_domain</span>
             <span class="arg-type">u32</span>
-            <code class="arg-value">{chain.domain}</code>
-            <span class="arg-note">{chain.label}</span>
+            <code class="arg-value">{destDomain}</code>
+            <span class="arg-note">{toSolana ? 'Solana' : chain?.label}</span>
         </li>
 
         <li class="row wide">
             <span class="arg-name">mint_recipient</span>
             <span class="arg-type">BytesN&lt;32&gt;</span>
-            <code class="arg-hex">{mintRecipientHex}</code>
-            <span class="arg-note">→ {evmRecipient} on {chain.label}</span>
+            {#if toSolana}
+                {#await solanaAtaPromise then ata}
+                    <code class="arg-hex">{ata ? toHex(ata) : ''}</code>
+                    <span class="arg-note"
+                        >→ your Solana USDC ATA (owner {shortStrkey(solanaRecipient ?? '')})</span
+                    >
+                {:catch}
+                    <span class="arg-placeholder">Invalid Solana recipient</span>
+                {/await}
+            {:else}
+                <code class="arg-hex">{mintRecipientHex}</code>
+                <span class="arg-note">→ {evmRecipient} on {chain?.label}</span>
+            {/if}
         </li>
 
         <li class="row">
@@ -366,8 +394,8 @@
                         <li>
                             <span class="arg-name">destination_domain</span>
                             <span class="arg-type">u32</span>
-                            <code class="arg-value">{chain.domain}</code>
-                            <span class="arg-note">{chain.label}</span>
+                            <code class="arg-value">{chain?.domain}</code>
+                            <span class="arg-note">{chain?.label}</span>
                         </li>
                         <li class="wide">
                             <span class="arg-name">mint_recipient</span>

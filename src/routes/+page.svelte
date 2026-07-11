@@ -8,7 +8,6 @@
     import StellarBurnPreview from '$lib/components/StellarBurnPreview.svelte';
     import EvmBurnPreview from '$lib/components/EvmBurnPreview.svelte';
     import SolanaBurnPreview from '$lib/components/SolanaBurnPreview.svelte';
-    import StellarToSolanaBurnPreview from '$lib/components/StellarToSolanaBurnPreview.svelte';
     import ResumeForm from '$lib/components/ResumeForm.svelte';
     import { createTransferStore } from '$lib/stores/transfer.svelte';
     import type { FreighterState } from '$lib/stellar/freighter';
@@ -81,9 +80,15 @@
     );
     let canSubmit = $derived(bothConnected && amount.trim() !== '' && !busy);
 
-    // Fast Transfer applies only when a non-Solana chain is the source; Stellar
-    // finalizes in seconds and Solana is Standard-only in this demo.
-    let fastAllowed = $derived(rightChain !== 'solana' && !stellarIsSource);
+    // Fast Transfer applies only when an EVM chain with a real finality delay is
+    // the source. Stellar and Solana finalize in seconds (Standard-only), and so
+    // does Arc — chains whose `attestationEtaMs` is undefined have no
+    // pre-finality window to mint into, so Fast is N/A there too.
+    let fastAllowed = $derived(
+        rightChain !== 'solana' &&
+            !stellarIsSource &&
+            EVM_CHAINS[rightChain].attestationEtaMs !== undefined,
+    );
     let effectiveSpeed = $derived<TransferSpeed>(fastAllowed ? speed : 'standard');
 
     async function send() {
@@ -222,10 +227,13 @@
             />
         {/if}
         {#if direction === 'stellar-to-solana' && stellar.address && solana && transfer.state.phase === 'idle'}
-            <StellarToSolanaBurnPreview
+            <StellarBurnPreview
                 stellarAddress={stellar.address}
                 solanaRecipient={solana.address}
                 {amount}
+                outboundFlow="two-tx"
+                forwarding={false}
+                speed="standard"
             />
         {/if}
     </section>
