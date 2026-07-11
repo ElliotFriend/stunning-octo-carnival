@@ -80,14 +80,13 @@
     );
     let canSubmit = $derived(bothConnected && amount.trim() !== '' && !busy);
 
-    // Fast Transfer applies only when an EVM chain with a real finality delay is
-    // the source. Stellar and Solana finalize in seconds (Standard-only), and so
-    // does Arc — chains whose `attestationEtaMs` is undefined have no
-    // pre-finality window to mint into, so Fast is N/A there too.
+    // Fast Transfer (mint-before-finality) applies when the SOURCE chain has a
+    // real finality delay to mint into: Solana yes; EVM chains with an
+    // attestation ETA yes; but not Stellar or Arc (they finalize in seconds, so
+    // there's no pre-finality window). Stellar-source is always Standard.
     let fastAllowed = $derived(
-        rightChain !== 'solana' &&
-            !stellarIsSource &&
-            EVM_CHAINS[rightChain].attestationEtaMs !== undefined,
+        !stellarIsSource &&
+            (rightChain === 'solana' || EVM_CHAINS[rightChain].attestationEtaMs !== undefined),
     );
     let effectiveSpeed = $derived<TransferSpeed>(fastAllowed ? speed : 'standard');
 
@@ -100,7 +99,7 @@
                 stellarAddress: stellar.address,
                 solanaWallet: solana,
                 amount: amount.trim(),
-                speed: 'standard',
+                speed: effectiveSpeed,
             });
         } else {
             if (!evm) return;
@@ -232,6 +231,7 @@
                 solanaAddress={solana.address}
                 stellarRecipient={stellar.address}
                 {amount}
+                speed={effectiveSpeed}
             />
         {/if}
         {#if direction === 'stellar-to-solana' && stellar.address && solana && transfer.state.phase === 'idle'}

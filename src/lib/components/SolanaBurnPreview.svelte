@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { SOLANA, STELLAR, SOLANA_MAX_FEE, STANDARD_THRESHOLD } from '$lib/config';
-    import { fetchBurnFee, feeBpsFor, computeMaxFee } from '$lib/circle/fees';
+    import { SOLANA, STELLAR, SOLANA_MAX_FEE, type TransferSpeed } from '$lib/config';
+    import { fetchBurnFee, feeBpsFor, computeMaxFee, thresholdFor } from '$lib/circle/fees';
     import { parseUsdcSolana } from '$lib/solana/usdc';
     import { strkeyToBytes32, encodeStellarForwarderHookData } from '$lib/stellar/recipient';
     import { shortAddr } from '$lib/utils';
@@ -9,7 +9,15 @@
         solanaAddress,
         stellarRecipient,
         amount,
-    }: { solanaAddress: string; stellarRecipient: string; amount: string } = $props();
+        speed = 'standard',
+    }: {
+        solanaAddress: string;
+        stellarRecipient: string;
+        amount: string;
+        speed?: TransferSpeed;
+    } = $props();
+
+    let threshold = $derived(thresholdFor(speed));
 
     type Parsed = { ok: true; raw: bigint } | { ok: false };
     let parsedAmount = $derived<Parsed>(
@@ -91,7 +99,7 @@
             <span class="arg-name">maxFee</span>
             <span class="arg-type">u64</span>
             {#await feePromise then rows}
-                {@const bps = feeBpsFor(rows, 'standard')}
+                {@const bps = feeBpsFor(rows, speed)}
                 <code class="arg-value">
                     {computeMaxFee(
                         parsedAmount.ok ? parsedAmount.raw : 0n,
@@ -108,8 +116,10 @@
         <li class="row">
             <span class="arg-name">minFinalityThreshold</span>
             <span class="arg-type">u32</span>
-            <code class="arg-value">{STANDARD_THRESHOLD}</code>
-            <span class="arg-note">standard (finalized)</span>
+            <code class="arg-value">{threshold}</code>
+            <span class="arg-note"
+                >{speed === 'fast' ? 'fast (mint before finality)' : 'standard (finalized)'}</span
+            >
         </li>
         <li class="row wide">
             <span class="arg-name">hookData</span>
