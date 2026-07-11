@@ -16,7 +16,6 @@
         computeMaxFee,
         fetchForwardFee,
         forwardedMaxFeeStellar,
-        type ForwardFeeRow,
     } from '$lib/circle/fees';
     import { CCTP_FORWARD_MAGIC, encodeCctpForwardHookData } from '$lib/stellar/cctp';
     import { solanaAtaToBytes32 } from '$lib/stellar/recipient';
@@ -75,10 +74,10 @@
     let feePromise = $derived(fetchBurnFee(STELLAR.domain, destDomain));
     let threshold = $derived(thresholdFor(speed));
 
-    // Solana destination is always plain two-tx deposit_for_burn — no wrapper,
-    // no forwarding hook. The wrapper/forwarding shapes are EVM-only.
-    let isWrapper = $derived(!toSolana && outboundFlow === 'wrapper');
-    let isForwarding = $derived(!toSolana && forwarding);
+    // Wrapper + forwarding shapes apply to either destination (the wrapper burns
+    // to any domain; the forwarding hook is dest-agnostic).
+    let isWrapper = $derived(outboundFlow === 'wrapper');
+    let isForwarding = $derived(forwarding);
 
     let contractAddress = $derived(
         isWrapper ? STELLAR.contracts.bridgeWrapper : STELLAR.contracts.tokenMessengerMinter,
@@ -97,12 +96,8 @@
     );
 
     // Forwarding maxFee comes from the ?forward=true quote (protocol fee +
-    // forwarding service fee), keyed by route. Never rendered for a Solana
-    // destination (forwarding is EVM-only), so resolve empty there instead of
-    // firing a pointless request.
-    let forwardFeePromise = $derived<Promise<ForwardFeeRow[]>>(
-        toSolana ? Promise.resolve([]) : fetchForwardFee(STELLAR.domain, destDomain),
-    );
+    // forwarding service fee), keyed by route (works for the Solana dest too).
+    let forwardFeePromise = $derived(fetchForwardFee(STELLAR.domain, destDomain));
 
     // The exact 32-byte hookData submitted on-chain, rendered as hex — single
     // source of truth is the encoder in cctp.ts.
@@ -394,14 +389,21 @@
                         <li>
                             <span class="arg-name">destination_domain</span>
                             <span class="arg-type">u32</span>
-                            <code class="arg-value">{chain?.domain}</code>
-                            <span class="arg-note">{chain?.label}</span>
+                            <code class="arg-value">{destDomain}</code>
+                            <span class="arg-note">{toSolana ? 'Solana' : chain?.label}</span>
                         </li>
                         <li class="wide">
                             <span class="arg-name">mint_recipient</span>
                             <span class="arg-type">BytesN&lt;32&gt;</span>
-                            <code class="arg-hex">{mintRecipientHex}</code>
-                            <span class="arg-note">→ {evmRecipient}</span>
+                            {#if toSolana}
+                                {#await solanaAtaPromise then ata}
+                                    <code class="arg-hex">{ata ? toHex(ata) : ''}</code>
+                                    <span class="arg-note">→ your Solana USDC ATA</span>
+                                {/await}
+                            {:else}
+                                <code class="arg-hex">{mintRecipientHex}</code>
+                                <span class="arg-note">→ {evmRecipient}</span>
+                            {/if}
                         </li>
                         <li>
                             <span class="arg-name">burn_token</span>

@@ -91,7 +91,7 @@
         {#if balanceError}<p class="error">{balanceError}</p>{/if}
     {/if}
 
-    {#if direction === 'stellar-to-evm'}
+    {#if direction === 'stellar-to-evm' || direction === 'stellar-to-solana'}
         <div class="flow-picker" role="tablist" aria-label="Stellar outbound flow">
             <span class="flow-label">Outbound flow</span>
             <div class="flow-buttons">

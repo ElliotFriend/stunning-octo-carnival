@@ -98,6 +98,10 @@
                 direction,
                 stellarAddress: stellar.address,
                 solanaWallet: solana,
+                // Only used by the stellar-to-solana burn (wrapper / forwarding
+                // combinations); ignored for solana-to-stellar.
+                outboundFlow,
+                forwarding,
                 amount: amount.trim(),
                 speed: effectiveSpeed,
             });
@@ -239,9 +243,9 @@
                 stellarAddress={stellar.address}
                 solanaRecipient={solana.address}
                 {amount}
-                outboundFlow="two-tx"
-                forwarding={false}
-                speed="standard"
+                {outboundFlow}
+                {forwarding}
+                speed={effectiveSpeed}
             />
         {/if}
     </section>

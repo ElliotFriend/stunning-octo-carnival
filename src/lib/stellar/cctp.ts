@@ -99,13 +99,13 @@ export async function bridgeUsdcToEvm(args: {
     caller: string;
     amount: bigint; // Stellar 7-decimal subunits
     destinationDomain: number;
-    evmRecipient: `0x${string}`;
+    mintRecipient: Uint8Array; // pre-encoded 32-byte recipient (EVM pad / Solana ATA)
     maxFee: bigint;
     finalityThreshold: number;
 }): Promise<{ hash: string; sourceDomain: number }> {
     const account = await stellarRpc.getAccount(args.caller);
 
-    const mintRecipient = leftPad32FromHex(args.evmRecipient);
+    const mintRecipient = args.mintRecipient;
     const destinationCaller = ZERO_BYTES_32;
 
     const tx = new TransactionBuilder(account, {
@@ -142,13 +142,13 @@ export async function bridgeUsdcToEvmWithHook(args: {
     caller: string;
     amount: bigint; // Stellar 7-decimal subunits
     destinationDomain: number;
-    evmRecipient: `0x${string}`;
+    mintRecipient: Uint8Array; // pre-encoded 32-byte recipient
     maxFee: bigint;
     finalityThreshold: number;
 }): Promise<{ hash: string; sourceDomain: number }> {
     const account = await stellarRpc.getAccount(args.caller);
 
-    const mintRecipient = leftPad32FromHex(args.evmRecipient);
+    const mintRecipient = args.mintRecipient;
     const destinationCaller = ZERO_BYTES_32;
     const hookData = encodeCctpForwardHookData();
 
@@ -210,13 +210,13 @@ export async function depositForBurnWithHookForwarded(args: {
     caller: string;
     amount: bigint; // Stellar 7-decimal subunits
     destinationDomain: number;
-    evmRecipient: `0x${string}`;
+    mintRecipient: Uint8Array; // pre-encoded 32-byte recipient
     maxFee: bigint;
     finalityThreshold: number;
 }): Promise<{ hash: string; sourceDomain: number }> {
     const account = await stellarRpc.getAccount(args.caller);
 
-    const mintRecipient = leftPad32FromHex(args.evmRecipient);
+    const mintRecipient = args.mintRecipient;
     const destinationCaller = ZERO_BYTES_32;
     const hookData = encodeCctpForwardHookData();
 
@@ -272,7 +272,7 @@ export async function mintAndForward(args: {
     return { hash };
 }
 
-function leftPad32FromHex(hex: `0x${string}`): Uint8Array {
+export function leftPad32FromHex(hex: `0x${string}`): Uint8Array {
     const clean = hex.toLowerCase().replace(/^0x/, '');
     if (!/^[0-9a-f]+$/.test(clean) || clean.length > 64) {
         throw new Error(`Invalid hex address: ${hex}`);
