@@ -13,7 +13,7 @@ import {
     TOKEN_MESSENGER_MINTER_V2_PROGRAM_ADDRESS,
 } from './generated/token-messenger-minter';
 import { encodeStellarForwarderHookData, strkeyToBytes32 } from '$lib/stellar/recipient';
-import { signAndSendBurnTx } from './signer';
+import { signAndSendSolanaTx } from './signer';
 import { SOLANA, STELLAR } from '$lib/config';
 import type { SolanaWallet } from './wallet';
 
@@ -100,9 +100,9 @@ export async function burnUsdcToStellar(args: {
         hookData,
     });
 
-    const signature = await signAndSendBurnTx({
+    const signature = await signAndSendSolanaTx({
         wallet: args.wallet,
-        instruction,
+        instructions: [instruction],
         feePayerSigner: ownerSigner,
     });
     return { signature };

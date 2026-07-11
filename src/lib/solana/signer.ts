@@ -1,5 +1,5 @@
 import {
-    appendTransactionMessageInstruction,
+    appendTransactionMessageInstructions,
     createTransactionMessage,
     getBase64Decoder,
     getTransactionEncoder,
@@ -29,17 +29,18 @@ type SignTransactionFeature = {
     }) => Promise<SignTransactionOutput | readonly SignTransactionOutput[]>;
 };
 
-// Assemble → sign → submit. The instruction already embeds its signers (the
-// ephemeral message_sent_event_data keypair signs locally here; the fee-payer
-// is a noop signer whose slot Phantom fills). We serialize the partially-signed
-// tx, hand it to Phantom for the fee-payer signature, then submit through our
-// own devnet RPC so the network stays pinned no matter Phantom's cluster.
-export async function signAndSendBurnTx(args: {
+// Assemble → sign → submit. Instructions may embed their own signers (e.g. the
+// burn's ephemeral message_sent_event_data keypair signs locally here); the
+// fee-payer is a noop signer whose slot Phantom fills. We serialize the
+// partially-signed tx, hand it to Phantom for the fee-payer signature, then
+// submit through our own devnet RPC so the network stays pinned no matter
+// Phantom's cluster.
+export async function signAndSendSolanaTx(args: {
     wallet: SolanaWallet;
-    instruction: Instruction;
+    instructions: Instruction[];
     feePayerSigner: TransactionSigner;
 }): Promise<string> {
-    const { wallet, instruction, feePayerSigner } = args;
+    const { wallet, instructions, feePayerSigner } = args;
 
     const { value: blockhash } = await solanaRpc.getLatestBlockhash().send();
 
@@ -47,7 +48,7 @@ export async function signAndSendBurnTx(args: {
         createTransactionMessage({ version: 0 }),
         (m) => setTransactionMessageFeePayerSigner(feePayerSigner, m),
         (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
-        (m) => appendTransactionMessageInstruction(instruction, m),
+        (m) => appendTransactionMessageInstructions(instructions, m),
     );
 
     const partiallySigned = await partiallySignTransactionMessageWithSigners(message);
