@@ -10,6 +10,7 @@
     let wallet = $state<SolanaWallet | null>(null);
     let amount = $state('5');
     let recipient = $state('');
+    let direction = $state<'solana-to-stellar' | 'stellar-to-solana'>('solana-to-stellar');
     let stellar = $state<FreighterState>({
         installed: false,
         address: null,
@@ -38,7 +39,7 @@
     async function burn() {
         if (!wallet || !stellar.address) return;
         await store.start({
-            direction: 'solana-to-stellar',
+            direction,
             stellarAddress: stellar.address,
             stellarRecipient: recipient || stellar.address,
             solanaWallet: wallet,
@@ -55,10 +56,18 @@
     }
 </script>
 
-<h1>Solana → Stellar burn spike</h1>
+<h1>Solana ↔ Stellar spike</h1>
+
+<label>
+    Direction
+    <select bind:value={direction}>
+        <option value="solana-to-stellar">Solana → Stellar</option>
+        <option value="stellar-to-solana">Stellar → Solana</option>
+    </select>
+</label>
 
 {#if !stellar.address}
-    <button onclick={connectStellar}>Connect Freighter (destination)</button>
+    <button onclick={connectStellar}>Connect Freighter</button>
 {:else}
     <p>Stellar: <code>{stellar.address}</code></p>
 {/if}
