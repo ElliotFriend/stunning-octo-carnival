@@ -1,0 +1,1892 @@
+{
+  "accounts": [
+    {
+      "discriminator": [
+        131,
+        100,
+        133,
+        56,
+        166,
+        225,
+        151,
+        60
+      ],
+      "name": "MessageSent"
+    },
+    {
+      "discriminator": [
+        71,
+        40,
+        180,
+        142,
+        19,
+        203,
+        35,
+        252
+      ],
+      "name": "MessageTransmitter"
+    },
+    {
+      "discriminator": [
+        212,
+        222,
+        157,
+        252,
+        130,
+        71,
+        179,
+        238
+      ],
+      "name": "UsedNonce"
+    }
+  ],
+  "address": "CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbeC",
+  "errors": [
+    {
+      "code": 6000,
+      "msg": "Invalid authority",
+      "name": "InvalidAuthority"
+    },
+    {
+      "code": 6001,
+      "msg": "Instruction is not allowed at this time",
+      "name": "ProgramPaused"
+    },
+    {
+      "code": 6002,
+      "msg": "Invalid message transmitter state",
+      "name": "InvalidMessageTransmitterState"
+    },
+    {
+      "code": 6003,
+      "msg": "Invalid signature threshold",
+      "name": "InvalidSignatureThreshold"
+    },
+    {
+      "code": 6004,
+      "msg": "Signature threshold already set",
+      "name": "SignatureThresholdAlreadySet"
+    },
+    {
+      "code": 6005,
+      "msg": "Invalid owner",
+      "name": "InvalidOwner"
+    },
+    {
+      "code": 6006,
+      "msg": "Invalid pauser",
+      "name": "InvalidPauser"
+    },
+    {
+      "code": 6007,
+      "msg": "Invalid attester manager",
+      "name": "InvalidAttesterManager"
+    },
+    {
+      "code": 6008,
+      "msg": "Invalid attester",
+      "name": "InvalidAttester"
+    },
+    {
+      "code": 6009,
+      "msg": "Attester already enabled",
+      "name": "AttesterAlreadyEnabled"
+    },
+    {
+      "code": 6010,
+      "msg": "Too few enabled attesters",
+      "name": "TooFewEnabledAttesters"
+    },
+    {
+      "code": 6011,
+      "msg": "Signature threshold is too low",
+      "name": "SignatureThresholdTooLow"
+    },
+    {
+      "code": 6012,
+      "msg": "Attester already disabled",
+      "name": "AttesterAlreadyDisabled"
+    },
+    {
+      "code": 6013,
+      "msg": "Message body exceeds max size",
+      "name": "MessageBodyLimitExceeded"
+    },
+    {
+      "code": 6014,
+      "msg": "Invalid destination caller",
+      "name": "InvalidDestinationCaller"
+    },
+    {
+      "code": 6015,
+      "msg": "Invalid message recipient",
+      "name": "InvalidRecipient"
+    },
+    {
+      "code": 6016,
+      "msg": "Sender is not permitted",
+      "name": "SenderNotPermitted"
+    },
+    {
+      "code": 6017,
+      "msg": "Invalid source domain",
+      "name": "InvalidSourceDomain"
+    },
+    {
+      "code": 6018,
+      "msg": "Invalid destination domain",
+      "name": "InvalidDestinationDomain"
+    },
+    {
+      "code": 6019,
+      "msg": "Invalid message version",
+      "name": "InvalidMessageVersion"
+    },
+    {
+      "code": 6020,
+      "msg": "Invalid used nonces account",
+      "name": "InvalidUsedNoncesAccount"
+    },
+    {
+      "code": 6021,
+      "msg": "Invalid recipient program",
+      "name": "InvalidRecipientProgram"
+    },
+    {
+      "code": 6022,
+      "msg": "Invalid nonce",
+      "name": "InvalidNonce"
+    },
+    {
+      "code": 6023,
+      "msg": "Nonce already used",
+      "name": "NonceAlreadyUsed"
+    },
+    {
+      "code": 6024,
+      "msg": "Message is too short",
+      "name": "MessageTooShort"
+    },
+    {
+      "code": 6025,
+      "msg": "Malformed message",
+      "name": "MalformedMessage"
+    },
+    {
+      "code": 6026,
+      "msg": "Invalid signature order or dupe",
+      "name": "InvalidSignatureOrderOrDupe"
+    },
+    {
+      "code": 6027,
+      "msg": "Invalid attester signature",
+      "name": "InvalidAttesterSignature"
+    },
+    {
+      "code": 6028,
+      "msg": "Invalid attestation length",
+      "name": "InvalidAttestationLength"
+    },
+    {
+      "code": 6029,
+      "msg": "Invalid signature recovery ID",
+      "name": "InvalidSignatureRecoveryId"
+    },
+    {
+      "code": 6030,
+      "msg": "Invalid signature S value",
+      "name": "InvalidSignatureSValue"
+    },
+    {
+      "code": 6031,
+      "msg": "Invalid message hash",
+      "name": "InvalidMessageHash"
+    },
+    {
+      "code": 6032,
+      "msg": "Invalid destination message",
+      "name": "InvalidDestinationMessage"
+    },
+    {
+      "code": 6033,
+      "msg": "Event account window not expired",
+      "name": "EventAccountWindowNotExpired"
+    },
+    {
+      "code": 6034,
+      "msg": "Destination domain is local domain",
+      "name": "DestinationDomainIsLocalDomain"
+    }
+  ],
+  "events": [
+    {
+      "discriminator": [
+        186,
+        136,
+        186,
+        14,
+        229,
+        2,
+        121,
+        211
+      ],
+      "name": "AttesterDisabled"
+    },
+    {
+      "discriminator": [
+        88,
+        57,
+        14,
+        133,
+        5,
+        219,
+        62,
+        190
+      ],
+      "name": "AttesterEnabled"
+    },
+    {
+      "discriminator": [
+        5,
+        97,
+        191,
+        108,
+        44,
+        189,
+        69,
+        88
+      ],
+      "name": "AttesterManagerUpdated"
+    },
+    {
+      "discriminator": [
+        134,
+        206,
+        151,
+        111,
+        137,
+        11,
+        160,
+        225
+      ],
+      "name": "MaxMessageBodySizeUpdated"
+    },
+    {
+      "discriminator": [
+        231,
+        68,
+        47,
+        77,
+        173,
+        241,
+        157,
+        166
+      ],
+      "name": "MessageReceived"
+    },
+    {
+      "discriminator": [
+        183,
+        253,
+        239,
+        246,
+        140,
+        179,
+        133,
+        105
+      ],
+      "name": "OwnershipTransferStarted"
+    },
+    {
+      "discriminator": [
+        172,
+        61,
+        205,
+        183,
+        250,
+        50,
+        38,
+        98
+      ],
+      "name": "OwnershipTransferred"
+    },
+    {
+      "discriminator": [
+        194,
+        251,
+        232,
+        196,
+        118,
+        95,
+        111,
+        219
+      ],
+      "name": "Pause"
+    },
+    {
+      "discriminator": [
+        142,
+        157,
+        158,
+        87,
+        127,
+        8,
+        119,
+        55
+      ],
+      "name": "PauserChanged"
+    },
+    {
+      "discriminator": [
+        156,
+        99,
+        103,
+        200,
+        15,
+        38,
+        122,
+        189
+      ],
+      "name": "SignatureThresholdUpdated"
+    },
+    {
+      "discriminator": [
+        241,
+        149,
+        104,
+        90,
+        199,
+        136,
+        219,
+        146
+      ],
+      "name": "Unpause"
+    }
+  ],
+  "instructions": [
+    {
+      "accounts": [
+        {
+          "name": "pending_owner",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "AcceptOwnershipParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        172,
+        23,
+        43,
+        13,
+        238,
+        213,
+        85,
+        150
+      ],
+      "name": "accept_ownership"
+    },
+    {
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "attester_manager",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "DisableAttesterParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        61,
+        171,
+        131,
+        95,
+        172,
+        15,
+        227,
+        229
+      ],
+      "name": "disable_attester"
+    },
+    {
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "attester_manager",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "EnableAttesterParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        2,
+        11,
+        193,
+        115,
+        5,
+        148,
+        4,
+        198
+      ],
+      "name": "enable_attester"
+    },
+    {
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "upgrade_authority",
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  115,
+                  115,
+                  97,
+                  103,
+                  101,
+                  95,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  109,
+                  105,
+                  116,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "message_transmitter_program_data"
+        },
+        {
+          "address": "CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbeC",
+          "name": "message_transmitter_program"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "InitializeParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "name": "initialize"
+    },
+    {
+      "accounts": [
+        {
+          "docs": [
+            "Account will be explicitly loaded to avoid error when it's not initialized"
+          ],
+          "name": "used_nonce"
+        }
+      ],
+      "args": [],
+      "discriminator": [
+        144,
+        72,
+        107,
+        148,
+        35,
+        218,
+        31,
+        187
+      ],
+      "name": "is_nonce_used",
+      "returns": "bool"
+    },
+    {
+      "accounts": [
+        {
+          "name": "pauser",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "PauseParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        211,
+        22,
+        221,
+        251,
+        74,
+        121,
+        193,
+        47
+      ],
+      "name": "pause"
+    },
+    {
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "caller",
+          "signer": true
+        },
+        {
+          "name": "authority_pda",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  115,
+                  115,
+                  97,
+                  103,
+                  101,
+                  95,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  109,
+                  105,
+                  116,
+                  116,
+                  101,
+                  114,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "receiver"
+              }
+            ]
+          }
+        },
+        {
+          "name": "message_transmitter"
+        },
+        {
+          "docs": [
+            "Each nonce is stored in a separate PDA"
+          ],
+          "name": "used_nonce",
+          "writable": true
+        },
+        {
+          "name": "receiver"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ReceiveMessageParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        38,
+        144,
+        127,
+        225,
+        31,
+        225,
+        238,
+        25
+      ],
+      "name": "receive_message"
+    },
+    {
+      "accounts": [
+        {
+          "docs": [
+            "rent SOL receiver, should match original rent payer"
+          ],
+          "name": "payee",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "message_sent_event_data",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ReclaimEventAccountParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        94,
+        198,
+        180,
+        159,
+        131,
+        236,
+        15,
+        174
+      ],
+      "name": "reclaim_event_account"
+    },
+    {
+      "accounts": [
+        {
+          "name": "event_rent_payer",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "sender_authority_pda",
+          "pda": {
+            "program": {
+              "kind": "account",
+              "path": "sender_program"
+            },
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          },
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "message_sent_event_data",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "sender_program"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "SendMessageParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        57,
+        40,
+        34,
+        178,
+        189,
+        10,
+        65,
+        26
+      ],
+      "name": "send_message"
+    },
+    {
+      "accounts": [
+        {
+          "name": "owner",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "SetMaxMessageBodySizeParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        168,
+        178,
+        8,
+        117,
+        217,
+        167,
+        219,
+        31
+      ],
+      "name": "set_max_message_body_size"
+    },
+    {
+      "accounts": [
+        {
+          "name": "attester_manager",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "SetSignatureThresholdParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        163,
+        19,
+        154,
+        168,
+        82,
+        209,
+        214,
+        219
+      ],
+      "name": "set_signature_threshold"
+    },
+    {
+      "accounts": [
+        {
+          "name": "owner",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "TransferOwnershipParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "name": "transfer_ownership"
+    },
+    {
+      "accounts": [
+        {
+          "name": "pauser",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UnpauseParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        169,
+        144,
+        4,
+        38,
+        10,
+        141,
+        188,
+        255
+      ],
+      "name": "unpause"
+    },
+    {
+      "accounts": [
+        {
+          "name": "owner",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateAttesterManagerParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        175,
+        245,
+        178,
+        104,
+        85,
+        179,
+        71,
+        16
+      ],
+      "name": "update_attester_manager"
+    },
+    {
+      "accounts": [
+        {
+          "name": "owner",
+          "relations": [
+            "message_transmitter"
+          ],
+          "signer": true
+        },
+        {
+          "name": "message_transmitter",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdatePauserParams"
+            }
+          }
+        }
+      ],
+      "discriminator": [
+        140,
+        171,
+        211,
+        132,
+        57,
+        201,
+        16,
+        254
+      ],
+      "name": "update_pauser"
+    }
+  ],
+  "metadata": {
+    "description": "Message Transmitter for Cross-Chain Transfer Protocol V2",
+    "name": "message_transmitter_v2",
+    "repository": "https://github.com/circlefin/solana-cctp-contracts",
+    "spec": "0.1.0",
+    "version": "0.2.0"
+  },
+  "types": [
+    {
+      "name": "AcceptOwnershipParams",
+      "type": {
+        "fields": [],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "AttesterDisabled",
+      "type": {
+        "fields": [
+          {
+            "name": "attester",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "AttesterEnabled",
+      "type": {
+        "fields": [
+          {
+            "name": "attester",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "AttesterManagerUpdated",
+      "type": {
+        "fields": [
+          {
+            "name": "previous_attester_manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_attester_manager",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "DisableAttesterParams",
+      "type": {
+        "fields": [
+          {
+            "name": "attester",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "EnableAttesterParams",
+      "type": {
+        "fields": [
+          {
+            "name": "new_attester",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "InitializeParams",
+      "type": {
+        "fields": [
+          {
+            "name": "local_domain",
+            "type": "u32"
+          },
+          {
+            "name": "attester",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_message_body_size",
+            "type": "u64"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "MaxMessageBodySizeUpdated",
+      "type": {
+        "fields": [
+          {
+            "name": "new_max_message_body_size",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "MessageReceived",
+      "type": {
+        "fields": [
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "source_domain",
+            "type": "u32"
+          },
+          {
+            "name": "nonce",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sender",
+            "type": "pubkey"
+          },
+          {
+            "name": "finality_threshold_executed",
+            "type": "u32"
+          },
+          {
+            "name": "message_body",
+            "type": "bytes"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "MessageSent",
+      "type": {
+        "fields": [
+          {
+            "name": "rent_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "message",
+            "type": "bytes"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "docs": [
+        "Main state of the MessageTransmitter program"
+      ],
+      "name": "MessageTransmitter",
+      "type": {
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "attester_manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "pauser",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "local_domain",
+            "type": "u32"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "signature_threshold",
+            "type": "u32"
+          },
+          {
+            "name": "enabled_attesters",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "max_message_body_size",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "type": {
+        "fields": [
+          {
+            "name": "previous_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_owner",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": {
+        "fields": [
+          {
+            "name": "previous_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_owner",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "Pause",
+      "type": {
+        "fields": [],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "PauseParams",
+      "type": {
+        "fields": [],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "PauserChanged",
+      "type": {
+        "fields": [
+          {
+            "name": "new_address",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "ReceiveMessageParams",
+      "type": {
+        "fields": [
+          {
+            "name": "message",
+            "type": "bytes"
+          },
+          {
+            "name": "attestation",
+            "type": "bytes"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "ReclaimEventAccountParams",
+      "type": {
+        "fields": [
+          {
+            "name": "attestation",
+            "type": "bytes"
+          },
+          {
+            "name": "destination_message",
+            "type": "bytes"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "SendMessageParams",
+      "type": {
+        "fields": [
+          {
+            "name": "destination_domain",
+            "type": "u32"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination_caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_finality_threshold",
+            "type": "u32"
+          },
+          {
+            "name": "message_body",
+            "type": "bytes"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "SetMaxMessageBodySizeParams",
+      "type": {
+        "fields": [
+          {
+            "name": "new_max_message_body_size",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "SetSignatureThresholdParams",
+      "type": {
+        "fields": [
+          {
+            "name": "new_signature_threshold",
+            "type": "u32"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "SignatureThresholdUpdated",
+      "type": {
+        "fields": [
+          {
+            "name": "old_signature_threshold",
+            "type": "u32"
+          },
+          {
+            "name": "new_signature_threshold",
+            "type": "u32"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "TransferOwnershipParams",
+      "type": {
+        "fields": [
+          {
+            "name": "new_owner",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "Unpause",
+      "type": {
+        "fields": [],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "UnpauseParams",
+      "type": {
+        "fields": [],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "UpdateAttesterManagerParams",
+      "type": {
+        "fields": [
+          {
+            "name": "new_attester_manager",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "UpdatePauserParams",
+      "type": {
+        "fields": [
+          {
+            "name": "new_pauser",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "UsedNonce",
+      "type": {
+        "fields": [
+          {
+            "name": "is_used",
+            "type": "bool"
+          }
+        ],
+        "kind": "struct"
+      }
+    }
+  ]
+}
